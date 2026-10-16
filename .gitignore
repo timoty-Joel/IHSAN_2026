@@ -1,0 +1,12 @@
+# Streamlit credentials & secrets (PENTING: Jangan upload ke Github publik)
+.streamlit/secrets.toml
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+venv/
+env/
+.env
