@@ -610,7 +610,7 @@ elif st.session_state.step == "topik_1":
 
     # Skor akumulatif topik 1
     subtotal_1 = sum(int(v) for k, v in st.session_state.current_gedung.items() 
-                        if k.endswith("_Poin") and any(k.startswith(f"Q{i}_") for i in range(1, 33)))
+                        if k.endswith("_Poin") and any(k.startswith(f"Q{i}_") for i in range(1, 32)))
     st.session_state.current_gedung["Skor_Topik_1"] = subtotal_1
 
     if st.button("Lanjut ke Topik 2 (Fasilitas Kebersihan) ➔", type="primary", use_container_width=True):
@@ -715,7 +715,7 @@ elif st.session_state.step == "topik_2":
     render_checbox_q("Q54", "Tempat Pembuangan Pembalut (Jika ada toilet perempuan): ", pembalut_check)
 
     subtotal_2 = sum(int(v) for k, v in st.session_state.current_gedung.items()
-                        if k.endswith("_Poin") and any(k.startswith(f"Q{i}_") for i in range(35, 57)))
+                        if k.endswith("_Poin") and any(k.startswith(f"Q{i}_") for i in range(33, 54)))
     st.session_state.current_gedung["Skor_Topik_2"] = subtotal_2
 
     if st.button("Lanjut ke Topik Kebutuhan Udara ➔", type="primary", use_container_width=True):
@@ -750,7 +750,7 @@ elif st.session_state.step == 'topik_3':
     render_question("Q60", "Apakah setiap orang bekerja dalam ruangan mendapat ruang udara (cubic space) paling sedikit 10 m3?", opt_standar)
 
     subtotal_3 = sum(int(v) for k, v in st.session_state.current_gedung.items()
-                        if k.endswith("_Poin") and any (k.startswith(f"Q{i}_") for i in range(56, 61)))
+                        if k.endswith("_Poin") and any (k.startswith(f"Q{i}_") for i in range(55, 60)))
     st.session_state.current_gedung["Skor_Topik_3"] = subtotal_3
     
 
@@ -778,7 +778,7 @@ elif st.session_state.step == 'topik_4':
 
     if st.button("Simpan Data Gedung Ini 💾", type="primary", use_container_width=True):
         subtotal_4 = sum(int(v) for k, v in st.session_state.current_gedung.items()
-                            if k.endswith("_Poin") and any(k.startswith(f"Q{i}_") for i in range(62, 67)))
+                            if k.endswith("_Poin") and any(k.startswith(f"Q{i}_") for i in range(61, 65)))
         st.session_state.current_gedung["Skor_Topik_4"] = subtotal_4
 
         standar = get_standar_bidang(punya_bawah_tanah, punya_halaman)
