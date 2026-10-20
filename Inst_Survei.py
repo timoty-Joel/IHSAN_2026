@@ -83,7 +83,7 @@ def valid_email(email: str)-> bool:
 def render_question(q_id, question_text, options):
     nomor_gedung = st.session_state.current_gedung.get("Nomor Gedung", 1)
     ans = st.radio(f"{q_id}, {question_text}", options, key=f"radio_{nomor_gedung}_{q_id}")
-    score = options.index(ans) + 1
+    score = options.index(ans) 
 
     # Simpan jawaban teks dan skornya
     st.session_state.current_gedung[f"{q_id}_Jawaban"] = ans
@@ -586,6 +586,7 @@ elif st.session_state.step == "topik_1":
 
     # Bangunan Bawah Tanah
     bawah_tanah = st.radio("Apakah tempat anda memiliki bangunan bawah tanah?", ["Ya", "Tidak"], key=f"radio_{nomor_gedung}_bt")
+    st.session_state.current_gedung["Bangunan Bawah Tanah"] = bawah_tanah
 
     # Jika iya
     if bawah_tanah == "Ya":
