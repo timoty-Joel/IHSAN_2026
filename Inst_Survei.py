@@ -492,7 +492,7 @@ elif st.session_state.step == 'identifikasi_objek':
             nama_gedung_clean = nama_gedung.strip()
             if not nama_gedung_clean:
                 st.error(f"Nama / Identitas Gedung ke-{nomor_gedung} wajib diisi agar tidak tertukar saat pengujian ulang!")
-            elif any(nama_gedung_clean.lower() == s.lower() for s in current_session_names+sheet_names):
+            elif any(nama_gedung_clean.lower() == s.lower() for s in current_session_names):
                 st.error(f"Gedung dengan nama '{nama_gedung_clean}' sudah ada untuk sesi ini. Harap periksa kembali daftar gedung yang sudah ada.")            
             else:
                 st.session_state.current_gedung = {
