@@ -122,7 +122,20 @@ def render_header_gedung():
         nomor = st.session_state.current_gedung.get("Nomor Gedung", "")
         st.info(f"🏢 **Objek ke-{nomor}:** {nama}")
 
+def to_int(val, default=0) -> int:
+    """Konversi nilai aman ke integer (mendukung float string seperti '8.0', int, float, None)."""
+    if val is None:
+        return default
+    s = str(val).strip()
+    if not s or s.lower() == "nan" or s == "-":
+        return default
+    try:
+        return int(float(s))
+    except (ValueError, TypeError):
+        return default
+
 def hitung_kebutuhan_toilet(total_pekerja: int):
+    total_pekerja = to_int(total_pekerja)
     if total_pekerja <= 0:
         return 0
     elif total_pekerja <= 15:
@@ -144,22 +157,22 @@ def evaluasi_toilet(daftar_gedung: list):
     if not daftar_gedung:
         return daftar_gedung
 
-    total_toilet = sum(int(g.get("Jumlah Toilet", 0)) for g in daftar_gedung)
+    total_toilet = sum(to_int(g.get("Jumlah Toilet", 0)) for g in daftar_gedung)
     total_semua_pekerja = sum(
-        int(g.get("Total Pekerja", 0)) for g in daftar_gedung
+        to_int(g.get("Total Pekerja", 0)) for g in daftar_gedung
     )
     syarat_total = hitung_kebutuhan_toilet(total_semua_pekerja)
 
     kumulatif_memenuhi = total_toilet >= syarat_total
 
     rincian_tiap_gedung = ", ".join([
-        f"{g.get('Nama Gedung', f'Gedung {idx+1}')}: {g.get('Jumlah Toilet', 0)}/{hitung_kebutuhan_toilet(int(g.get('Total Pekerja', 0)))}"
+        f"{g.get('Nama Gedung', f'Gedung {idx+1}')}: {g.get('Jumlah Toilet', 0)}/{hitung_kebutuhan_toilet(to_int(g.get('Total Pekerja', 0)))}"
         for idx, g in enumerate(daftar_gedung)
     ])
 
     for g in daftar_gedung:
-        toilet_gedung = int(g.get("Jumlah Toilet", 0))
-        pekerja_gedung = int(g.get("Total Pekerja", 0))
+        toilet_gedung = to_int(g.get("Jumlah Toilet", 0))
+        pekerja_gedung = to_int(g.get("Total Pekerja", 0))
         syarat_mandiri = hitung_kebutuhan_toilet(pekerja_gedung)
         mandiri_memenuhi = toilet_gedung >= syarat_mandiri
 
@@ -633,13 +646,13 @@ elif st.session_state.step == "topik_2":
 
     # Input banyak toilet
     nomor_gedung = st.session_state.current_gedung.get("Nomor Gedung", 1)
-    total_pekerja_gedung = int(st.session_state.current_gedung.get("Total Pekerja", 0))
+    total_pekerja_gedung = to_int(st.session_state.current_gedung.get("Total Pekerja", 0))
 
     jumlah_toilet = st.number_input(
         "Jumlah toilet di gedung ini",
         min_value=0,
         step=1,
-        value=int(st.session_state.current_gedung.get("Jumlah Toilet", 0)),
+        value=to_int(st.session_state.current_gedung.get("Jumlah Toilet", 0)),
         key=f"input_toilet_{nomor_gedung}"
     )
 
@@ -908,10 +921,10 @@ elif st.session_state.step == "submit_sheets":
 
                 # Pemetaan skor riil per bidang gedung
                 skor_aktual_bidang = {
-                    "Kondisi Fisik": int(g.get("Skor_Topik_1", 0)),
-                    "Fasilitas Kebersihan": int(g.get("Skor_Topik_2", 0)),
-                    "Kebutuhan Udara": int(g.get("Skor_Topik_3", 0)),
-                    "Tata Laksana Kerumahtanggaan": int(g.get("Skor_Topik_4", 0))
+                    "Kondisi Fisik": to_int(g.get("Skor_Topik_1", 0)),
+                    "Fasilitas Kebersihan": to_int(g.get("Skor_Topik_2", 0)),
+                    "Kebutuhan Udara": to_int(g.get("Skor_Topik_3", 0)),
+                    "Tata Laksana Kerumahtanggaan": to_int(g.get("Skor_Topik_4", 0))
                 }
 
                 # Evaluasi bidang-bidang mana saja yang di bawah standar
