@@ -1,97 +1,72 @@
 # config_evaluasi.py
 
 SUB_BIDANG_CONFIG = {
-    "Kondisi Fisik": {
-        "Halaman & Area Terbuka": {
-            "Q1": "Kebersihan halaman",
-            "Q2": "Kerapian halaman",
-            "Q3": "Kondisi permukaan halaman tidak rata/berlubang",
-            "Q4": "Drainase halaman becek/tergenang",
-            "Q5": "Kecukupan luas halaman untuk lalu lintas orang/barang",
-            "Q6": "Kekuatan bahan penutup saluran pembuangan air",
+    "Bangunan Tempat Kerja": {
+        "Halaman": {
+            "A2": "Kebersihan dan kerapian halaman",
+            "A3": "Kerataan permukaan halaman",
+            "A4": "Halaman tidak becek dan bebas genangan air",
+            "A6": "Kekuatan penutup saluran air pembuangan halaman",
+            "A7": "Kelancaran aliran saluran air pembuangan halaman",
         },
-        "Struktur Gedung & Ruang Kerja": {
-            "Q7": "Kebersihan dan pemeliharaan gedung",
-            "Q8": "Kekokohan struktur bangunan (bebas retak berisiko)",
-            "Q9": "Kecukupan ruang gerak minimal 2 m² per pekerja",
+        "Gedung": {
+            "A8": "Kondisi kebersihan dan pemeliharaan gedung",
+            "A9": "Kekuatan dan kekokohan struktur gedung",
+            "A10": "Kecukupan ruang gerak minimal 2 m² per orang",
+            "A11": "Dinding dan langit-langit kering dan tidak lembap",
+            "A12": "Dinding dan langit-langit dicat / mudah dibersihkan",
+            "A13": "Pengecatan ulang dinding dan langit-langit min. 5 tahun sekali",
+            "A14": "Pembersihan dinding dan langit-langit min. 1 tahun sekali",
+            "A15": "Lantai keras, tahan air, dan tahan bahan kimia",
+            "A16": "Permukaan lantai datar, tidak licin, dan mudah dibersihkan",
+            "A17": "Pembersihan lantai secara teratur",
+            "A18": "Perlindungan atap dari panas matahari dan air hujan",
+            "A19": "Atap tidak bocor, tidak berlubang, dan bebas jamur",
         },
-        "Dinding & Langit - Langit": {
-            "Q10": "Kondisi dinding kering/bebas lembap/bebas korosi",
-            "Q11": "Kondisi langit-langit kering/bebas lembap",
-            "Q12": "Kondisi dinding dicat dan mudah dibersihkan",
-            "Q13": "Langit-langit dicat",
-            "Q14": "Kebersihan langit-langit",
-            "Q15": "Pengecatan ulang dinding berkala",
-            "Q16": "Pembersihan rutin dinding",
-            "Q17": "Pembersihan rutin langit-langit",
-        },
-        "Lantai": {
-            "Q18": "Lantai terbuat dari bahan yang keras",
-            "Q19": "Lantai tahan air",
-            "Q20": "Lantai tahan bahan kimia merusak",
-            "Q21": "Lantai datar dan mudah dibersihkan",
-            "Q22": "Lantai tidak licin",
-            "Q23": "Pembersihan lantai secara teratur",
-        },
-        "Atap": {
-            "Q24": "Perlindungan atap dari panas matahari dan hujan",
-            "Q25": "Atap tidak bocor dan tidak berlubang",
-            "Q26": "Atap bebas dari jamur",
-        },
-        "Bangunan Bawah Tanah": {
-            "Q27": "Kekuatan struktur bawah tanah",
-            "Q28": "Sistem ventilasi udara bawah tanah",
-            "Q29": "Sumber pencahayaan bawah tanah",
-            "Q30": "Kelancaran saluran pembuangan air bawah tanah",
-            "Q31": "Kebersihan dan perawatan ruang bawah tanah",
-            "Q32": "Pemenuhan syarat Ruang Terbatas (Confined Space)",
+        "Ruang Bawah Tanah": {
+            "A21": "Kekuatan struktur bangunan bawah tanah",
+            "A22": "Sistem ventilasi udara bangunan bawah tanah",
+            "A23": "Sumber pencahayaan bangunan bawah tanah",
+            "A24": "Saluran pembuangan air bangunan bawah tanah",
+            "A25": "Kebersihan dan perawatan bangunan bawah tanah",
         }
     },
     "Fasilitas Kebersihan": {
-        "Toilet & Sanitasi": {
-            "Q33": "Kecukupan rasio jumlah toilet terhadap jumlah pekerja",
-            "Q34": "Kebersihan toilet dan bebas bau",
-            "Q35": "Toilet bebas dari serangga (lalat/nyamuk)",
-            "Q36": "Kelancaran saluran pembuangan air toilet",
-            "Q37": "Ketersediaan pasokan air bersih",
-            "Q38": "Kelengkapan pintu penutup toilet",
-            "Q39": "Kecukupan penerangan toilet",
-            "Q40": "Kelancaran sirkulasi udara toilet",
-            "Q41": "Jadwal pembersihan harian toilet secara periodik",
-            "Q42": "Ketersediaan toilet selama jam kerja",
-            "Q43": "Pemisahan toilet pria, wanita, dan disabilitas",
-            "Q44": "Pemasangan tanda/identitas toilet yang jelas",
-            "Q45": "Kelengkapan fasilitas jamban, sabun, dan wastafel",
+        "Toilet": {
+            "B2": "Kecukupan jumlah toilet terhadap jumlah pekerja",
+            "B3": "Kebersihan toilet dan bebas bau",
+            "B4": "Ketersediaan toilet khusus penyandang disabilitas",
         },
-        "Tempat Penyimpanan & Tempat Sampah": {
-            "Q46": "Penyediaan pakaian kerja sesuai aturan K3",
-            "Q47": "Penyediaan ruang ganti terpisah pria dan wanita",
-            "Q48": "Penyediaan loker penyimpanan aman bagi pekerja",
-            "Q49": "Penyediaan tempat sampah terpisah sesuai label",
-            "Q50": "Pelabelan tempat sampah terpisah",
-            "Q51": "Kondisi tempat sampah dalam keadaan tertutup",
-            "Q52": "Tutup tempat sampah berbahan kedap air",
-            "Q53": "Tempat sampah tidak menjadi sarang serangga",
-            "Q54": "Penyediaan tempat pembuangan pembalut di toilet wanita",
+        "Loker": {
+            "B5": "Ketersediaan loker penyimpanan sesuai kebutuhan pekerja",
+            "B6": "Ketersediaan ruang ganti pakaian pekerja",
         },
+        "Tempat Sampah": {
+            "B7": "Ketersediaan tempat sampah di area kerja",
+            "B8": "Tempat sampah terpilah organik, anorganik, dan limbah B3",
+        },
+        "Peralatan Kebersihan": {
+            "B9": "Kelayakan dan fungsi peralatan kebersihan",
+        }
     },
     "Kebutuhan Udara": {
-        "Sirkulasi & Kualitas Udara": {
-            "Q55": "Kenyamanan suhu ruangan (23 - 26°C)",
-            "Q56": "Kadar kelembaban ruangan (40 - 60%)",
-            "Q57": "Kadar oksigen dalam ruang (19,5% - 23,5%)",
-            "Q58": "Ketersediaan sistem ventilasi memadai",
-            "Q59": "Pembersihan rutin ventilasi minimal 3 bulan sekali",
-            "Q60": "Kecukupan volume ruang udara minimal 10 m³ per pekerja",
+        "KUDR": {
+            "C1": "Suhu udara ruang kerja dalam rentang 23–26°C",
+            "C2": "Kelembapan relatif udara dalam rentang 40–60%",
+        },
+        "Ventilasi": {
+            "C3": "Fungsi ventilasi udara alami maupun mekanis",
+        },
+        "Ruang Udara": {
+            "C4": "Kecukupan ruang udara (cubic space) minimal 10 m³ per pekerja",
         }
     },
     "Tata Laksana Kerumahtanggaan": {
-        "Penataan & Housekeeping": {
-            "Q61": "Pemisahan antara alat, perkakas, dan bahan",
-            "Q62": "Penataan posisi alat dan material kerja",
-            "Q63": "Aktivitas pembersihan berkala teratur",
-            "Q64": "Ketersediaan SOP dan pengembangan prosedur kebersihan",
-            "Q65": "Pelabelan area dan alat yang jelas",
+        "Housekeeping": {
+            "D1": "Pemisahan antara alat, perkakas, dan bahan",
+            "D2": "Penataan posisi alat, perkakas, dan bahan",
+            "D3": "Aktivitas pembersihan berkala teratur",
+            "D4": "SOP kebersihan, penataan bahan dan pengembangan berkala",
         }
     }
 }
@@ -100,17 +75,22 @@ def analisis_sub_bidang_kurang(data_gedung: dict, bidang_nama: str):
     """
     Mengidentifikasi sub bidang dan butir pertanyaan yang nilainya tidak memenuhi standar.
     Kriteria kurang:
-    - Q34 bernilai 0
-    - Pertanyaan skala nilai (1-5) bernilai <= 3
-    - Pertanyaan biner/opsi lain bernilai poin 1 padahal maksimal 2, dsb.
+    - Poin < 2 (atau skor < 2 untuk pertanyaan 3 opsi / biner)
     """
     hasil_sub_bidang = {}
-    daftar_sub = SUB_BIDANG_CONFIG.get(bidang_nama, {})
+    
+    # Normalisasi nama bidang
+    lookup_nama = bidang_nama
+    if "Bangunan" in bidang_nama or "Fisik" in bidang_nama:
+        lookup_nama = "Bangunan Tempat Kerja"
+    elif "Fasilitas" in bidang_nama or "Kebersihan" in bidang_nama and "Tata" not in bidang_nama:
+        lookup_nama = "Fasilitas Kebersihan"
+    elif "Udara" in bidang_nama:
+        lookup_nama = "Kebutuhan Udara"
+    elif "Tata Laksana" in bidang_nama or "Housekeeping" in bidang_nama:
+        lookup_nama = "Tata Laksana Kerumahtanggaan"
 
-    # Kumpulan soalan mengikut jenis pilihan jawapan
-    SOALAN_3_PILIHAN = {"Q47", "Q48", "Q61", "Q62", "Q63", "Q64", "Q65"}
-    SOALAN_2_PILIHAN = {"Q32", "Q43", "Q46"}
-    SOALAN_CHECKBOX = {"Q45", "Q54"}
+    daftar_sub = SUB_BIDANG_CONFIG.get(lookup_nama, {})
 
     for nama_sub, daftar_q in daftar_sub.items():
         soal_tidak_terpenuhi = []
@@ -119,44 +99,16 @@ def analisis_sub_bidang_kurang(data_gedung: dict, bidang_nama: str):
             poin = data_gedung.get(f"{q_id}_Poin")
             jawaban = str(data_gedung.get(f"{q_id}_Jawaban", ""))
 
-            # Abaikan soalan yang dilangkau atau N/A
-            if "N/A" in jawaban or "Tidak ada" in jawaban or "Tidak terpenuhi" in jawaban and poin == 0:
-                pass
-
             if "N/A" in jawaban or "Tidak ada" in jawaban:
                 continue
 
-            if poin is not None and str(poin).isdigit():
-                skor_angka = int(poin)
-                kurang = False
+            if poin is not None and str(poin).strip() != "":
+                try:
+                    skor_angka = int(float(str(poin).strip()))
+                except Exception:
+                    continue
 
-                # 1. Logik khusus untuk nisbah tandas (Q34)
-                if q_id == "Q34":
-                    if skor_angka == 0:
-                        kurang = True
-
-                # 2. Logik untuk soalan 3 pilihan (Markah maksimum = 3)
-                elif q_id in SOALAN_3_PILIHAN:
-                    if skor_angka < 3:
-                        kurang = True
-
-                # 3. Logik untuk soalan 2 pilihan / Ya-Tidak (Markah maksimum = 2)
-                elif q_id in SOALAN_2_PILIHAN:
-                    if skor_angka < 2:
-                        kurang = True
-
-                # 4. Logik untuk soalan kotak semak (Kelengkapan kemudahan tandas / pembalut, maks = 5)
-                elif q_id in SOALAN_CHECKBOX:
-                    if skor_angka < 5:
-                        kurang = True
-
-                # 5. Logik untuk soalan skala standard 5 pilihan (Default)
-                else:
-                    if skor_angka <= 3:
-                        kurang = True
-
-                # Masukkan ke dalam senarai jika kriteria tidak dipenuhi
-                if kurang:
+                if skor_angka < 2:
                     soal_tidak_terpenuhi.append({
                         "id": q_id,
                         "deskripsi": deskripsi,

@@ -10,13 +10,17 @@ from daftar_pertanyaan import (
     KELOMPOK_FASILITAS,
     MASTER_PERTANYAAN,
     INFOGRAFIS_DATA,
+    OPT_3_TINGKAT,
+    OPT_YA_TIDAK,
+    NILAI_OPSI,
+    PANDUAN_PENGISIAN,
     hitung_kebutuhan_toilet,
     evaluasi_toilet_daftar_gedung,
     analisis_evaluasi_gedung,
-    hitung_evaluasi_toilet_lengkap
+    hitung_evaluasi_toilet_lengkap,
+    hitung_skor_lengkap_gedung,
+    to_int
 )
-
-from daftar_pertanyaan import to_int
 
 #from Inst_Survei import hitung_evaluasi_toilet_lengkap, to_int
 import database_manager as db
@@ -224,13 +228,54 @@ if "current_gedung" not in st.session_state:
     st.session_state.current_gedung = {}
 
 if "selected_facilities" not in st.session_state:
-    st.session_state.selected_facilities = ["struktur_gedung", "toilet_sanitasi", "sampah_pakaian", "kebutuhan_udara", "housekeeping"]
+    st.session_state.selected_facilities = [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]]
 
 if "penguji_kode_input" not in st.session_state:
     st.session_state.penguji_kode_input = ""
 
 if "pjk3_menu_choice" not in st.session_state:
     st.session_state.pjk3_menu_choice = "Verifikasi Asesmen"
+
+
+# ==============================================================================
+# HELPER: POP-UP KONTEKS DEFINISI OPERASIONAL & BUKTI OBJEKTIF (KOLOM D/E/F)
+# ==============================================================================
+def render_konteks_popover(q_data: dict):
+    """Menampilkan popover konteks definisi operasional & panduan pengisian."""
+    with st.popover("ℹ️ Konteks & Definisi (Pop-up)"):
+        st.markdown(f"**Pertanyaan:** {q_data['teks']}")
+        st.markdown(f"📖 **Definisi Operasional (Konteks):**  \n{q_data.get('definisi', '-')}")
+        if q_data.get('bukti'):
+            st.markdown(f"🔍 **Bukti Objektif yang Diperiksa:**  \n{q_data.get('bukti', '-')}")
+        st.markdown("---")
+        st.markdown("**📋 Panduan Kriteria Penilaian:**")
+        if q_data.get("tipe") == "ya_tidak":
+            st.markdown("- **Ya (Skor 2):** Memenuhi persyaratan secara penuh didukung bukti objektif.")
+            st.markdown("- **Tidak (Skor 0):** Belum atau tidak memenuhi persyaratan.")
+        elif q_data.get("tipe") in ["screening_saluran", "info_toilet"]:
+            st.markdown("_Pilihan identifikasi keberadaan fasilitas tempat kerja._")
+        else:
+            st.markdown("- 🟢 **Memenuhi (Skor 2):** Persyaratan diterapkan, berfungsi, dan didukung bukti objektif yang memadai.")
+            st.markdown("- 🟡 **Memenuhi Sebagian (Skor 1):** Ada sebagian pelaksanaan tetapi belum konsisten, belum mencakup seluruh area/shift, atau tindak lanjut belum lengkap.")
+            st.markdown("- 🔴 **Tidak Memenuhi (Skor 0):** Tidak tersedia, tidak berfungsi, atau tidak ada bukti yang memadai.")
+
+
+# ==============================================================================
+# HELPER: TABEL RINGKASAN SKOR RESMI (SESUAI SHEET 'RINGKASAN SKOR')
+# ==============================================================================
+def render_tabel_ringkasan_skor(gedung: dict, fasilitas_ids: list = None):
+    """Menampilkan tabel evaluasi skor sesuai matriks sheet 'Ringkasan Skor'."""
+    skor_info = hitung_skor_lengkap_gedung(gedung, fasilitas_ids)
+    df_ringkas = pd.DataFrame(skor_info["rincian_tabel"])
+    if not df_ringkas.empty:
+        tampil_cols = ["Kategori", "Aspek", "Jumlah Indikator", "Bobot Nilai Max", "Bobot Persentase", "Capaian (%)", "Skor Maksimum", "Skor Tercapai", "Interpretasi Internal"]
+        st.dataframe(df_ringkas[tampil_cols], width="stretch", hide_index=True)
+
+        col_met1, col_met2, col_met3 = st.columns(3)
+        col_met1.metric("Total Skor Tercapai", f"{skor_info['total_skor']} / {skor_info['skor_maks_tersedia']}")
+        col_met2.metric("Indeks Pemenuhan (%)", f"{skor_info['indeks_pemenuhan']}%")
+        status_color = "✅ Memenuhi Standar" if skor_info['indeks_pemenuhan'] >= 75 else "⚠️ Perlu Tindakan Perbaikan"
+        col_met3.metric("Status Kepatuhan K3", status_color)
 
 
 # ==============================================================================
@@ -330,10 +375,13 @@ def render_poin_kurang_gedung(gedung: dict, fasilitas_ids: list = None):
                 <span style="font-size:0.75rem; background:#fee2e2; color:#991b1b; padding:2px 8px; border-radius:6px; font-weight:600;">Skor Aktual: {p['skor']}</span>
             </div>
             <div style="font-size:0.82rem; color:#475569; margin: 4px 0;">
-                <b>Topik:</b> {p.get('topik', '-')} &nbsp;|&nbsp; <b>Sub-Bidang:</b> {p.get('sub_bidang', '-')}
+                <b>Topik:</b> {p.get('topik', '-')} &nbsp;|&nbsp; <b>Aspek:</b> {p.get('aspek', p.get('sub_bidang', '-'))}
             </div>
             <div style="font-size:0.84rem; color:#1e293b; margin: 4px 0;">
                 <b>Jawaban Tercatat:</b> <i>"{p.get('jawaban', '-')}"</i>
+            </div>
+            <div style="font-size:0.80rem; color:#334155; margin: 4px 0; background:#f1f5f9; padding:6px 10px; border-radius:6px;">
+                📖 <b>Konteks Definisi:</b> {p.get('definisi', '-')}
             </div>
             <div style="font-size:0.82rem; color:#0369a1; margin-top:4px;">
                 ⚖️ <b>Rujukan Regulasi:</b> {p.get('regulasi', 'Permenaker No. 5/2018')}
@@ -656,7 +704,7 @@ if st.session_state.active_role == "🏢 Perusahaan":
         st.caption(f"Jumlah Pekerja: {current_g.get('Total Pekerja')} orang | Fasilitas Terpilih: {len(st.session_state.selected_facilities)} Kelompok")
 
         # Khusus input jumlah toilet jika fasilitas toilet dipilih
-        if "toilet_sanitasi" in st.session_state.selected_facilities:
+        if "toilet" in st.session_state.selected_facilities or "toilet_sanitasi" in st.session_state.selected_facilities:
             st.markdown("### 🚻 Evaluasi Rasio Jumlah Toilet Gedung:")
             syarat_toilet = hitung_kebutuhan_toilet(to_int(current_g.get("Total Pekerja", 0)))
             col_t1, col_t2 = st.columns([1, 2])
@@ -671,6 +719,14 @@ if st.session_state.active_role == "🏢 Perusahaan":
             with col_t2:
                 status_toilet = "✅ Memenuhi Standar Minimal" if jml_toilet >= syarat_toilet else f"⚠️ Kurang dari Standar Minimal (Butuh {syarat_toilet} toilet)"
                 st.info(f"**Standar Permenaker No. 5/2018:** Kebutuhan minimal untuk {current_g.get('Total Pekerja')} pekerja adalah **{syarat_toilet} toilet**.  \nStatus: **{status_toilet}**")
+
+        st.info(
+            "💡 **Panduan Kriteria Penilaian (Sheet 'Panduan Pengisian'):**  \n"
+            "- 🟢 **Memenuhi (Bobot 2):** Persyaratan diterapkan, berfungsi, dan didukung bukti objektif yang memadai.  \n"
+            "- 🟡 **Memenuhi Sebagian (Bobot 1):** Ada sebagian pelaksanaan tetapi belum konsisten, belum mencakup seluruh area/shift, atau tindak lanjut belum lengkap.  \n"
+            "- 🔴 **Tidak Memenuhi (Bobot 0):** Tidak tersedia, tidak berfungsi, atau tidak ada bukti yang memadai.  \n"
+            "*(Khusus butir **A10, A13, A14** menggunakan pilihan **Ya** (bobot 2) dan **Tidak** (bobot 0))*"
+        )
 
         st.markdown("---")
 
@@ -688,58 +744,90 @@ if st.session_state.active_role == "🏢 Perusahaan":
                     if not q_data:
                         continue
 
-                    st.markdown(f"**[{q_id}] {q_data['teks']}**")
+                    # Pemeriksaan dependensi (contoh saluran pembuangan air halaman A6 & A7 bergantung pada A5)
+                    if q_data.get("depends_on") == "A5":
+                        ans_a5 = str(current_g.get("A5_Jawaban", "")).lower()
+                        if "tidak" in ans_a5:
+                            st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} dilewati karena tidak ada saluran air pembuangan di halaman.*")
+                            current_g[f"{q_id}_Jawaban"] = "Tidak berlaku (N/A)"
+                            current_g[f"{q_id}_Poin"] = 0
+                            continue
+
+                    col_q_title, col_q_pop = st.columns([4, 1.2])
+                    with col_q_title:
+                        st.markdown(f"**[{q_id}] {q_data['teks']}**")
+                    with col_q_pop:
+                        render_konteks_popover(q_data)
 
                     # Pop-up Infografis jika pertanyaan memiliki istilah khusus
-                    if q_data.get("has_infografis") or q_id in INFOGRAFIS_DATA:
+                    if q_id in INFOGRAFIS_DATA:
                         render_infografis_hover_html(q_id)
 
-                    # Widget sesuai tipe pertanyaan
-                    if q_data["tipe"] == "radio":
+                    help_tooltip = f"📌 Definisi Operasional:\n{q_data.get('definisi', '')}\n\n🔍 Bukti Objektif:\n{q_data.get('bukti', '')}"
+
+                    # 1. Pertanyaan Screening Saluran Air (A5)
+                    if q_data["tipe"] == "screening_saluran":
                         curr_ans = current_g.get(f"{q_id}_Jawaban", q_data["opsi"][0])
                         ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
-                        
-                        penjelasan_help = None
-                        if q_id == 'Q9':
-                            penjelasan_help = "Ruang gerak bebas yang dimaksudnya adalah..."
-                        
                         chosen = st.radio(
                             label=f"Pilihan untuk {q_id}:",
                             options=q_data["opsi"],
                             index=ans_idx,
                             key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
                             label_visibility="collapsed",
-                            help = penjelasan_help
+                            help=help_tooltip
                         )
-                        score = q_data["opsi"].index(chosen)
+                        current_g[f"{q_id}_Jawaban"] = chosen
+                        current_g[f"{q_id}_Poin"] = 0
+
+                    # 2. Pertanyaan Info Toilet (B1)
+                    elif q_data["tipe"] == "info_toilet":
+                        curr_ans = current_g.get(f"{q_id}_Jawaban", q_data["opsi"][0])
+                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
+                        chosen = st.radio(
+                            label=f"Pilihan untuk {q_id}:",
+                            options=q_data["opsi"],
+                            index=ans_idx,
+                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
+                            label_visibility="collapsed",
+                            help=help_tooltip
+                        )
+                        current_g[f"{q_id}_Jawaban"] = chosen
+                        current_g[f"{q_id}_Poin"] = 0
+
+                    # 3. Pertanyaan Iya / Tidak (A10, A13, A14)
+                    elif q_data["tipe"] == "ya_tidak":
+                        curr_ans = current_g.get(f"{q_id}_Jawaban", "Ya")
+                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
+                        chosen = st.radio(
+                            label=f"Pilihan untuk {q_id} (Ya / Tidak):",
+                            options=q_data["opsi"],
+                            index=ans_idx,
+                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
+                            label_visibility="collapsed",
+                            help=help_tooltip
+                        )
+                        score = NILAI_OPSI.get(chosen, 2 if chosen == "Ya" else 0)
                         current_g[f"{q_id}_Jawaban"] = chosen
                         current_g[f"{q_id}_Poin"] = score
 
-                    elif q_data["tipe"] == "checkbox":
-                        st.write("Centang kelengkapan yang terpenuhi:")
-                        c_boxes = st.columns(min(len(q_data["opsi"]), 3))
-                        selected_cb = []
-                        for cb_i, cb_opt in enumerate(q_data["opsi"]):
-                            with c_boxes[cb_i % len(c_boxes)]:
-                                is_checked = st.checkbox(
-                                    cb_opt,
-                                    key=f"cb_{q_id}_{cb_i}_{current_g.get('Nomor Gedung')}"
-                                )
-                                if is_checked:
-                                    selected_cb.append(cb_opt)
+                    # 4. Pertanyaan Standar 3 Pilihan (Memenuhi, Memenuhi Sebagian, Tidak Memenuhi)
+                    else:
+                        curr_ans = current_g.get(f"{q_id}_Jawaban", "Memenuhi")
+                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
+                        chosen = st.radio(
+                            label=f"Pilihan untuk {q_id}:",
+                            options=q_data["opsi"],
+                            index=ans_idx,
+                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
+                            label_visibility="collapsed",
+                            help=help_tooltip
+                        )
+                        score = NILAI_OPSI.get(chosen, 0)
+                        current_g[f"{q_id}_Jawaban"] = chosen
+                        current_g[f"{q_id}_Poin"] = score
 
-                        current_g[f"{q_id}_Jawaban"] = ", ".join(selected_cb) if selected_cb else "Tidak terpenuhi"
-                        current_g[f"{q_id}_Poin"] = len(selected_cb)
-
-                    elif q_data["tipe"] == "auto_toilet":
-                        t_avail = to_int(current_g.get("Jumlah Toilet", 0))
-                        t_need = hitung_kebutuhan_toilet(to_int(current_g.get("Total Pekerja", 0)))
-                        lulus = t_avail >= t_need
-                        current_g[f"{q_id}_Jawaban"] = f"{'Memenuhi' if lulus else 'Tidak memenuhi'} ({t_avail}/{t_need} toilet)"
-                        current_g[f"{q_id}_Poin"] = 1 if lulus else 0
-                        st.caption(f"Evaluasi rasio: {current_g[f'{q_id}_Jawaban']}")
-
-                    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+                    st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
         st.markdown("---")
         c_btn1, c_btn2 = st.columns([1, 1])
@@ -750,17 +838,17 @@ if st.session_state.active_role == "🏢 Perusahaan":
 
         with c_btn2:
             if st.button("Simpan Data Gedung & Lanjut ke Hasil ➔", type="primary", width="stretch"):
-                # Hitung subtotal skor per topik
-                topik_1_score = sum(to_int(current_g.get(f"Q{i}_Poin", 0)) for i in range(1, 33))
-                topik_2_score = sum(to_int(current_g.get(f"Q{i}_Poin", 0)) for i in range(33, 55))
-                topik_3_score = sum(to_int(current_g.get(f"Q{i}_Poin", 0)) for i in range(55, 61))
-                topik_4_score = sum(to_int(current_g.get(f"Q{i}_Poin", 0)) for i in range(61, 66))
+                # Hitung skor lengkap per aspek dan kategori sesuai sheet 'Ringkasan Skor'
+                skor_res = hitung_skor_lengkap_gedung(current_g, st.session_state.selected_facilities)
 
-                current_g["Skor_Topik_1"] = topik_1_score
-                current_g["Skor_Topik_2"] = topik_2_score
-                current_g["Skor_Topik_3"] = topik_3_score
-                current_g["Skor_Topik_4"] = topik_4_score
-                current_g["Total Poin Gedung"] = topik_1_score + topik_2_score + topik_3_score + topik_4_score
+                current_g["Skor_Topik_1"] = skor_res["Skor_Topik_1"]
+                current_g["Skor_Topik_2"] = skor_res["Skor_Topik_2"]
+                current_g["Skor_Topik_3"] = skor_res["Skor_Topik_3"]
+                current_g["Skor_Topik_4"] = skor_res["Skor_Topik_4"]
+                current_g["Total Poin Gedung"] = skor_res["total_skor"]
+                current_g["Indeks Pemenuhan"] = skor_res["indeks_pemenuhan"]
+                current_g["Skor Maksimal Tersedia"] = skor_res["skor_maks_tersedia"]
+                current_g["Rincian_Tabel_Skor"] = skor_res["rincian_tabel"]
 
                 # Evaluasi pemenuhan standar & butir kurang
                 eval_res = analisis_evaluasi_gedung(current_g, st.session_state.selected_facilities)
@@ -825,14 +913,20 @@ if st.session_state.active_role == "🏢 Perusahaan":
         # Tampilkan poin-poin yang kurang untuk setiap gedung
         for idx, g in enumerate(st.session_state.daftar_gedung):
             nama_g = g.get("Nama Gedung", f"Gedung {idx+1}")
-            with st.expander(f"🏢 **{nama_g}** — Skor: {g.get('Total Poin Gedung')} ({g.get('Status Pemenuhan')})", expanded=True):
+            skor_tot = g.get('Total Poin Gedung', 0)
+            skor_max_t = g.get('Skor Maksimal Tersedia', 100)
+            st_pem = g.get('Status Pemenuhan', '-')
+            with st.expander(f"🏢 **{nama_g}** — Skor: {skor_tot} / {skor_max_t} ({st_pem})", expanded=True):
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Kondisi Fisik", g.get("Skor_Topik_1", "-"))
-                c2.metric("Sanitasi Kebersihan", g.get("Skor_Topik_2", "-"))
-                c3.metric("Kebutuhan Udara", g.get("Skor_Topik_3", "-"))
-                c4.metric("Housekeeping", g.get("Skor_Topik_4", "-"))
+                c1.metric("Bangunan Kerja (A)", f"{g.get('Skor_Topik_1', '-')} / 25")
+                c2.metric("Kebersihan (B)", f"{g.get('Skor_Topik_2', '-')} / 25")
+                c3.metric("Kebutuhan Udara (C)", f"{g.get('Skor_Topik_3', '-')} / 25")
+                c4.metric("Housekeeping (D)", f"{g.get('Skor_Topik_4', '-')} / 25")
 
+                st.markdown("##### 📊 Matriks Capaian Skor Per Aspek (Sheet 'Ringkasan Skor'):")
                 fac_ids = g.get("Fasilitas Terpilih")
+                render_tabel_ringkasan_skor(g, fac_ids)
+
                 render_poin_kurang_gedung(g, fac_ids)
 
         st.markdown("---")
@@ -1032,7 +1126,7 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                             st.markdown("---")
 
                             # 2. Verifikasi Fasilitas (Checklist)
-                            fasilitas_terpilih = g_verif.get("Fasilitas Terpilih", ["struktur_gedung", "toilet_sanitasi", "sampah_pakaian", "kebutuhan_udara", "housekeeping"])
+                            fasilitas_terpilih = g_verif.get("Fasilitas Terpilih", [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]])
                             fasilitas_aktif_v = [f for f in KELOMPOK_FASILITAS if f["id"] in fasilitas_terpilih]
 
                             tabs_sub_soal = st.tabs([f"{f['icon']} {f['nama']}" for f in fasilitas_aktif_v])
@@ -1046,10 +1140,23 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                                         if not q_data:
                                             continue
 
-                                        st.markdown(f"**[{q_id}] {q_data['teks']}**")
+                                        # Pemeriksaan dependensi saluran air
+                                        if q_data.get("depends_on") == "A5":
+                                            ans_a5_v = str(g_verif.get("A5_Jawaban", "")).lower()
+                                            if "tidak" in ans_a5_v:
+                                                st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} dilewati karena tidak ada saluran air pembuangan di halaman.*")
+                                                g_verif[f"{q_id}_Jawaban"] = "Tidak berlaku (N/A)"
+                                                g_verif[f"{q_id}_Poin"] = 0
+                                                continue
+
+                                        col_vq_t, col_vq_p = st.columns([4, 1.2])
+                                        with col_vq_t:
+                                            st.markdown(f"**[{q_id}] {q_data['teks']}**")
+                                        with col_vq_p:
+                                            render_konteks_popover(q_data)
 
                                         # Pop-up Infografis
-                                        if q_data.get("has_infografis") or q_id in INFOGRAFIS_DATA:
+                                        if q_id in INFOGRAFIS_DATA:
                                             render_infografis_hover_html(q_id)
 
                                         # Tampilkan jawaban mandiri perusahaan sebagai referensi penguji
@@ -1057,8 +1164,7 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                                         st.caption(f"📌 *Jawaban Mandiri Perusahaan:* **{jawaban_awal_pt}**")
 
                                         # Input Verifikasi oleh Penguji K3
-                                        if q_data["tipe"] == "radio":
-                                            # Ambil jawaban eksisting jika ada
+                                        if q_data["tipe"] == "screening_saluran":
                                             curr_v_ans = g_verif.get(f"{q_id}_Jawaban", q_data["opsi"][0])
                                             v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
                                             chosen_v = st.radio(
@@ -1067,45 +1173,59 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                                                 index=v_idx,
                                                 key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
                                             )
-                                            score_v = q_data["opsi"].index(chosen_v)
+                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
+                                            g_verif[f"{q_id}_Poin"] = 0
+
+                                        elif q_data["tipe"] == "info_toilet":
+                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", q_data["opsi"][0])
+                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
+                                            chosen_v = st.radio(
+                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}):",
+                                                options=q_data["opsi"],
+                                                index=v_idx,
+                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
+                                            )
+                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
+                                            g_verif[f"{q_id}_Poin"] = 0
+
+                                        elif q_data["tipe"] == "ya_tidak":
+                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", "Ya")
+                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
+                                            chosen_v = st.radio(
+                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}) [Ya / Tidak]:",
+                                                options=q_data["opsi"],
+                                                index=v_idx,
+                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
+                                            )
+                                            score_v = NILAI_OPSI.get(chosen_v, 2 if chosen_v == "Ya" else 0)
                                             g_verif[f"{q_id}_Jawaban"] = chosen_v
                                             g_verif[f"{q_id}_Poin"] = score_v
 
-                                        elif q_data["tipe"] == "checkbox":
-                                            st.write("Verifikasi kelengkapan yang nyata ada di lapangan:")
-                                            c_boxes_v = st.columns(min(len(q_data["opsi"]), 3))
-                                            sel_cb_v = []
-                                            for cb_i, cb_opt in enumerate(q_data["opsi"]):
-                                                with c_boxes_v[cb_i % len(c_boxes_v)]:
-                                                    checked_v = st.checkbox(
-                                                        cb_opt,
-                                                        key=f"pjk3_cb_{q_id}_{cb_i}_{g_idx}_{active_key}"
-                                                    )
-                                                    if checked_v:
-                                                        sel_cb_v.append(cb_opt)
-
-                                            g_verif[f"{q_id}_Jawaban"] = ", ".join(sel_cb_v) if sel_cb_v else "Tidak terpenuhi"
-                                            g_verif[f"{q_id}_Poin"] = len(sel_cb_v)
-
-                                        elif q_data["tipe"] == "auto_toilet":
-                                            t_ok = toilet_fisik_k3 >= syarat_toilet_g
-                                            g_verif[f"{q_id}_Jawaban"] = f"{'Memenuhi' if t_ok else 'Tidak memenuhi'} ({toilet_fisik_k3}/{syarat_toilet_g} toilet)"
-                                            g_verif[f"{q_id}_Poin"] = 1 if t_ok else 0
-                                            st.caption(f"Verifikasi rasio toilet: {g_verif[f'{q_id}_Jawaban']}")
+                                        else:
+                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", "Memenuhi")
+                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
+                                            chosen_v = st.radio(
+                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}):",
+                                                options=q_data["opsi"],
+                                                index=v_idx,
+                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
+                                            )
+                                            score_v = NILAI_OPSI.get(chosen_v, 0)
+                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
+                                            g_verif[f"{q_id}_Poin"] = score_v
 
                                         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-                            # Hitung ulang skor terverifikasi untuk gedung ini
-                            t1_v = sum(to_int(g_verif.get(f"Q{i}_Poin", 0)) for i in range(1, 33))
-                            t2_v = sum(to_int(g_verif.get(f"Q{i}_Poin", 0)) for i in range(33, 55))
-                            t3_v = sum(to_int(g_verif.get(f"Q{i}_Poin", 0)) for i in range(55, 61))
-                            t4_v = sum(to_int(g_verif.get(f"Q{i}_Poin", 0)) for i in range(61, 66))
-
-                            g_verif["Skor_Topik_1"] = t1_v
-                            g_verif["Skor_Topik_2"] = t2_v
-                            g_verif["Skor_Topik_3"] = t3_v
-                            g_verif["Skor_Topik_4"] = t4_v
-                            g_verif["Total Poin Gedung"] = t1_v + t2_v + t3_v + t4_v
+                            # Hitung ulang skor terverifikasi untuk gedung ini sesuai sheet 'Ringkasan Skor'
+                            skor_res_v = hitung_skor_lengkap_gedung(g_verif, fasilitas_terpilih)
+                            g_verif["Skor_Topik_1"] = skor_res_v["Skor_Topik_1"]
+                            g_verif["Skor_Topik_2"] = skor_res_v["Skor_Topik_2"]
+                            g_verif["Skor_Topik_3"] = skor_res_v["Skor_Topik_3"]
+                            g_verif["Skor_Topik_4"] = skor_res_v["Skor_Topik_4"]
+                            g_verif["Total Poin Gedung"] = skor_res_v["total_skor"]
+                            g_verif["Indeks Pemenuhan"] = skor_res_v["indeks_pemenuhan"]
+                            g_verif["Skor Maksimal Tersedia"] = skor_res_v["skor_maks_tersedia"]
+                            g_verif["Rincian_Tabel_Skor"] = skor_res_v["rincian_tabel"]
 
                             eval_res_v = analisis_evaluasi_gedung(g_verif, fasilitas_terpilih)
                             g_verif["Status Pemenuhan"] = eval_res_v["status_pemenuhan"]
@@ -1320,10 +1440,13 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                             st_pemenuhan = g_item.get("Status Pemenuhan", "-")
                             with st.expander(f"🏢 **{nama_bg}** — Skor Total: {g_item.get('Total Poin Gedung', 0)} ({st_pemenuhan})", expanded=True):
                                 c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-                                c_m1.metric("Kondisi Fisik", g_item.get("Skor_Topik_1", "-"))
-                                c_m2.metric("Sanitasi Kebersihan", g_item.get("Skor_Topik_2", "-"))
-                                c_m3.metric("Kebutuhan Udara", g_item.get("Skor_Topik_3", "-"))
-                                c_m4.metric("Housekeeping", g_item.get("Skor_Topik_4", "-"))
+                                c_m1.metric("Bangunan Kerja (A)", f"{g_item.get('Skor_Topik_1', '-')} / 25")
+                                c_m2.metric("Kebersihan (B)", f"{g_item.get('Skor_Topik_2', '-')} / 25")
+                                c_m3.metric("Kebutuhan Udara (C)", f"{g_item.get('Skor_Topik_3', '-')} / 25")
+                                c_m4.metric("Housekeeping (D)", f"{g_item.get('Skor_Topik_4', '-')} / 25")
+
+                                st.markdown("##### 📊 Matriks Capaian Skor Per Aspek:")
+                                render_tabel_ringkasan_skor(g_item, g_item.get("Fasilitas Terpilih"))
 
                                 render_poin_kurang_gedung(g_item)
 
