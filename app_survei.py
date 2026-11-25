@@ -1,19 +1,27 @@
 
 
+import re
+import urllib.parse
 import uuid
 from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 # Import modul instrumen survei & evaluasi
 from daftar_pertanyaan import (
     KELOMPOK_FASILITAS,
     MASTER_PERTANYAAN,
     INFOGRAFIS_DATA,
+    OPT_IYA_TIDAK,
     OPT_3_TINGKAT,
     OPT_YA_TIDAK,
     NILAI_OPSI,
     PANDUAN_PENGISIAN,
+    PERTANYAAN_DISABILITAS,
+    PERTANYAAN_TERBALIK,
+    hitung_skor_opsi,
+    normalize_fasilitas_ids,
     hitung_kebutuhan_toilet,
     evaluasi_toilet_daftar_gedung,
     analisis_evaluasi_gedung,
@@ -238,37 +246,14 @@ if "pjk3_menu_choice" not in st.session_state:
 
 
 # ==============================================================================
-# HELPER: POP-UP KONTEKS DEFINISI OPERASIONAL & BUKTI OBJEKTIF (KOLOM D/E/F)
-# ==============================================================================
-def render_konteks_popover(q_data: dict):
-    """Menampilkan popover konteks definisi operasional & panduan pengisian."""
-    with st.popover("ℹ️ Konteks & Definisi (Pop-up)"):
-        st.markdown(f"**Pertanyaan:** {q_data['teks']}")
-        st.markdown(f"📖 **Definisi Operasional (Konteks):**  \n{q_data.get('definisi', '-')}")
-        if q_data.get('bukti'):
-            st.markdown(f"🔍 **Bukti Objektif yang Diperiksa:**  \n{q_data.get('bukti', '-')}")
-        st.markdown("---")
-        st.markdown("**📋 Panduan Kriteria Penilaian:**")
-        if q_data.get("tipe") == "ya_tidak":
-            st.markdown("- **Ya (Skor 2):** Memenuhi persyaratan secara penuh didukung bukti objektif.")
-            st.markdown("- **Tidak (Skor 0):** Belum atau tidak memenuhi persyaratan.")
-        elif q_data.get("tipe") in ["screening_saluran", "info_toilet"]:
-            st.markdown("_Pilihan identifikasi keberadaan fasilitas tempat kerja._")
-        else:
-            st.markdown("- 🟢 **Memenuhi (Skor 2):** Persyaratan diterapkan, berfungsi, dan didukung bukti objektif yang memadai.")
-            st.markdown("- 🟡 **Memenuhi Sebagian (Skor 1):** Ada sebagian pelaksanaan tetapi belum konsisten, belum mencakup seluruh area/shift, atau tindak lanjut belum lengkap.")
-            st.markdown("- 🔴 **Tidak Memenuhi (Skor 0):** Tidak tersedia, tidak berfungsi, atau tidak ada bukti yang memadai.")
-
-
-# ==============================================================================
-# HELPER: TABEL RINGKASAN SKOR RESMI (SESUAI SHEET 'RINGKASAN SKOR')
+# HELPER: TABEL RINGKASAN SKOR ('MATRIKS PENILAIAN (2)')
 # ==============================================================================
 def render_tabel_ringkasan_skor(gedung: dict, fasilitas_ids: list = None):
-    """Menampilkan tabel evaluasi skor sesuai matriks sheet 'Ringkasan Skor'."""
+    """Menampilkan tabel evaluasi skor per Kategori sesuai sheet 'Matriks Penilaian (2)'."""
     skor_info = hitung_skor_lengkap_gedung(gedung, fasilitas_ids)
     df_ringkas = pd.DataFrame(skor_info["rincian_tabel"])
     if not df_ringkas.empty:
-        tampil_cols = ["Kategori", "Aspek", "Jumlah Indikator", "Bobot Nilai Max", "Bobot Persentase", "Capaian (%)", "Skor Maksimum", "Skor Tercapai", "Interpretasi Internal"]
+        tampil_cols = ["Kode Kategori", "Kategori", "Jumlah Indikator", "Skor Tercapai", "Skor Maksimum", "Capaian (%)", "Interpretasi Internal"]
         st.dataframe(df_ringkas[tampil_cols], width="stretch", hide_index=True)
 
         col_met1, col_met2, col_met3 = st.columns(3)
@@ -279,19 +264,31 @@ def render_tabel_ringkasan_skor(gedung: dict, fasilitas_ids: list = None):
 
 
 # ==============================================================================
-# HELPER: POP-UP INFOGRAFIS
+# HELPER: POP-UP INFOGRAFIS SAAT DIHOVER (KOLOM E 'MATRIKS PENILAIAN (2)')
 # ==============================================================================
 def render_infografis_hover_html(q_id: str):
-    """Menampilkan tombol info dan kartu hover infografis sesuai q_id."""
+    """Menampilkan badge & kartu pop-up infografis ketika dihover berdasarkan Kolom E."""
     info = INFOGRAFIS_DATA.get(q_id)
     if not info:
         return
 
-    poin_items = "".join([f"<li>{p}</li>" for p in info.get("poin_kunci", [])])
+    poin_list = info.get("poin_kunci", [])
+    poin_box_html = ""
+    if poin_list:
+        poin_items = "".join([f"<li>{p}</li>" for p in poin_list])
+        poin_box_html = f"""
+        <div class="k3-poin-box">
+          <strong>📌 Ketentuan Baku Regulasi:</strong>
+          <ul>
+            {poin_items}
+          </ul>
+        </div>
+        """
+
     html_code = f"""
     <div class="k3-hover-container">
       <div class="k3-badge-pill">
-        💡 <b>Infografis Istilah:</b> {info['istilah']} <span class="hover-hint">(Arahkan kursor)</span>
+        💡 <b>Panduan Penilaian ({q_id})</b> <span class="hover-hint">(Arahkan kursor untuk detail)</span>
       </div>
       <div class="k3-popover-card">
         <div class="k3-popover-header">
@@ -300,16 +297,96 @@ def render_infografis_hover_html(q_id: str):
           <div class="k3-regulasi">⚖️ {info['regulasi']}</div>
         </div>
         <p class="k3-ringkasan">{info['ringkasan']}</p>
-        <div class="k3-poin-box">
-          <strong>📌 Ketentuan Baku Regulasi:</strong>
-          <ul>
-            {poin_items}
-          </ul>
-        </div>
+        {poin_box_html}
       </div>
     </div>
     """
     st.markdown(html_code, unsafe_allow_html=True)
+
+
+# ==============================================================================
+# HELPER: LOKASI KANTOR & TAGGING GOOGLE MAPS
+# ==============================================================================
+DAFTAR_PROVINSI_INDONESIA = [
+    "DKI Jakarta", "Jawa Barat", "Banten", "Jawa Tengah", "DI Yogyakarta", "Jawa Timur",
+    "Aceh", "Sumatera Utara", "Sumatera Barat", "Riau", "Kepulauan Riau", "Jambi",
+    "Sumatera Selatan", "Kepulauan Bangka Belitung", "Bengkulu", "Lampung",
+    "Bali", "Nusa Tenggara Barat", "Nusa Tenggara Timur",
+    "Kalimantan Barat", "Kalimantan Tengah", "Kalimantan Selatan", "Kalimantan Timur", "Kalimantan Utara",
+    "Sulawesi Utara", "Gorontalo", "Sulawesi Tengah", "Sulawesi Barat", "Sulawesi Selatan", "Sulawesi Tenggara",
+    "Maluku", "Maluku Utara", "Papua", "Papua Barat", "Papua Barat Daya", "Papua Tengah", "Papua Pegunungan", "Papua Selatan"
+]
+
+
+def build_gmaps_urls(nama_jalan: str, kota_kab: str, provinsi: str, gmaps_tag: str = "") -> tuple[str, str, str]:
+    """
+    Menghasilkan (query_display, external_url, embed_url) untuk tagging Google Maps
+    berdasarkan koordinat/link GMaps atau gabungan Nama Jalan, Kota/Kabupaten, dan Provinsi.
+    """
+    tag_clean = str(gmaps_tag or "").strip()
+    addr_parts = [p.strip() for p in [nama_jalan, kota_kab, provinsi] if str(p or "").strip() and str(p).strip() != "-"]
+    full_address = ", ".join(addr_parts)
+
+    coord_match = None
+    if tag_clean:
+        # Cek pola koordinat lat, lng (misal: -6.2088, 106.8456 atau @-6.2088,106.8456)
+        m = re.search(r"(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)", tag_clean)
+        if m:
+            coord_match = f"{m.group(1)},{m.group(2)}"
+
+    if coord_match:
+        query_target = coord_match
+    elif tag_clean and not tag_clean.startswith("http"):
+        query_target = f"{tag_clean}, {full_address}" if full_address else tag_clean
+    elif full_address:
+        query_target = f"{full_address}, Indonesia"
+    else:
+        query_target = "Jakarta, Indonesia"
+
+    encoded_q = urllib.parse.quote(query_target)
+    embed_url = f"https://maps.google.com/maps?q={encoded_q}&t=&z=16&ie=UTF8&iwloc=&output=embed"
+
+    if tag_clean.startswith("http://") or tag_clean.startswith("https://"):
+        external_url = tag_clean
+    else:
+        external_url = f"https://www.google.com/maps/search/?api=1&query={encoded_q}"
+
+    return query_target, external_url, embed_url
+
+
+def render_gmaps_location_box(c_data: dict, show_map_default: bool = False):
+    """Menampilkan detail alamat terstruktur (Nama Jalan, Kota/Kab, Provinsi) beserta peta Google Maps."""
+    jalan = c_data.get("Nama Jalan", "").strip()
+    kota = c_data.get("Kota/Kabupaten", "").strip()
+    prov = c_data.get("Provinsi", "").strip()
+    lokasi_gabungan = c_data.get("Lokasi Pengujian", "-").strip()
+    gmaps_tag = c_data.get("Tag Google Maps", "").strip()
+
+    if not jalan and lokasi_gabungan and lokasi_gabungan != "-":
+        jalan = lokasi_gabungan
+
+    _, ext_url, embed_url = build_gmaps_urls(jalan, kota, prov, gmaps_tag)
+
+    detail_alamat = jalan if jalan else lokasi_gabungan
+    wilayah_str = ", ".join([p for p in [kota, prov] if p and p != "-"])
+
+    st.markdown(f"""
+    <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:10px; padding:12px 16px; margin:8px 0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+                <div style="font-size:0.88rem; color:#0f172a;">📍 <b>Nama Jalan / Alamat:</b> {detail_alamat or '-'}</div>
+                <div style="font-size:0.84rem; color:#475569;">🏙️ <b>Kota/Kabupaten:</b> {kota or '-'} &nbsp;|&nbsp; 🗺️ <b>Provinsi:</b> {prov or '-'}</div>
+                {f'<div style="font-size:0.80rem; color:#0369a1;">📌 <b>Tag / Koordinat GMaps:</b> <code>{gmaps_tag}</code></div>' if gmaps_tag else ''}
+            </div>
+            <a href="{ext_url}" target="_blank" style="background:#0284c7; color:white !important; text-decoration:none; padding:6px 14px; border-radius:8px; font-size:0.82rem; font-weight:600;">
+                🗺️ Buka di Google Maps ↗
+            </a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    with st.expander("📍 Lihat Titik Tagging Peta Google Maps", expanded=show_map_default):
+        components.iframe(embed_url, height=300)
 
 
 # ==============================================================================
@@ -483,11 +560,6 @@ if st.session_state.active_role == "🏢 Perusahaan":
                         value=st.session_state.company_data.get("No Telp Perusahaan", ""),
                         placeholder="Contoh: 021-89765432"
                     )
-                    lokasi = st.text_area(
-                        "Lokasi / Alamat Pengujian*",
-                        value=st.session_state.company_data.get("Lokasi Pengujian", ""),
-                        placeholder="Contoh: Kawasan Industri Jababeka Blok C No. 10, Cikarang"
-                    )
 
                 with c2:
                     responden = st.text_input(
@@ -525,12 +597,77 @@ if st.session_state.active_role == "🏢 Perusahaan":
                         "Industri Rumah Tangga (1 - 4 orang)"
                     ])
 
-                btn_lanjut_baru = st.form_submit_button("Mulai Penilaian Gedung ➔", width="stretch", type="primary")
+                st.markdown("---")
+                st.markdown("#### 📍 Detail Lokasi Kantor & Tagging Google Maps")
+                st.caption("Isi detail alamat jalan, kota/kabupaten, provinsi, serta titik koordinat atau link Google Maps lokasi kantor/tempat kerja.")
+
+                col_lok1, col_lok2 = st.columns([1.4, 1])
+                with col_lok1:
+                    nama_jalan = st.text_input(
+                        "Nama Jalan & Detail Nomor / Kawasan Kantor*",
+                        value=st.session_state.company_data.get("Nama Jalan", ""),
+                        placeholder="Contoh: Jl. Jababeka Raya Blok C No. 10, Kawasan Industri"
+                    )
+                    c_kota, c_prov = st.columns(2)
+                    with c_kota:
+                        kota_kab = st.text_input(
+                            "Kota / Kabupaten*",
+                            value=st.session_state.company_data.get("Kota/Kabupaten", ""),
+                            placeholder="Contoh: Kab. Bekasi / Kota Jakarta Selatan"
+                        )
+                    with c_prov:
+                        curr_prov = st.session_state.company_data.get("Provinsi", "DKI Jakarta")
+                        prov_idx = DAFTAR_PROVINSI_INDONESIA.index(curr_prov) if curr_prov in DAFTAR_PROVINSI_INDONESIA else 0
+                        provinsi = st.selectbox(
+                            "Provinsi*",
+                            DAFTAR_PROVINSI_INDONESIA,
+                            index=prov_idx
+                        )
+
+                with col_lok2:
+                    gmaps_tag = st.text_input(
+                        "Tagging Google Maps (Titik Koordinat Lat,Long / Link GMaps)",
+                        value=st.session_state.company_data.get("Tag Google Maps", ""),
+                        placeholder="Contoh: -6.2088, 106.8456 atau https://maps.app.goo.gl/..."
+                    )
+                    st.caption(
+                        "💡 *Tips Tagging:* Anda dapat menempelkan koordinat (`Lat, Long`) atau link dari "
+                        "[Google Maps ↗](https://www.google.com/maps). Jika dikosongkan, peta otomatis mencari dari alamat jalan, kota/kabupaten, dan provinsi."
+                    )
+
+                c_fbtn1, c_fbtn2 = st.columns([1, 1.5])
+                with c_fbtn1:
+                    btn_preview_map = st.form_submit_button("🗺️ Pratinjau Tag Lokasi di Peta", width="stretch")
+                with c_fbtn2:
+                    btn_lanjut_baru = st.form_submit_button("Mulai Penilaian Gedung ➔", width="stretch", type="primary")
+
+                if btn_preview_map:
+                    lokasi_full = ", ".join([p.strip() for p in [nama_jalan, kota_kab, provinsi] if p.strip()])
+                    _, ext_gmaps, _ = build_gmaps_urls(nama_jalan, kota_kab, provinsi, gmaps_tag)
+                    st.session_state.company_data.update({
+                        "Nama Perusahaan": nama_pt.strip(),
+                        "Legalitas": legalitas,
+                        "No Induk Perusahaan": nib.strip(),
+                        "No Telp Perusahaan": telepon.strip(),
+                        "Nama Jalan": nama_jalan.strip(),
+                        "Kota/Kabupaten": kota_kab.strip(),
+                        "Provinsi": provinsi,
+                        "Tag Google Maps": gmaps_tag.strip(),
+                        "Link Google Maps": ext_gmaps,
+                        "Lokasi Pengujian": lokasi_full,
+                        "Nama Responden": responden.strip(),
+                        "Jabatan": jabatan.strip(),
+                        "Email Responden": email.strip(),
+                        "Jenis Usaha (KBLI)": kbli,
+                        "Kategori Pekerja": kategori_pekerja,
+                    })
 
                 if btn_lanjut_baru:
-                    if not nama_pt.strip() or not nib.strip() or not responden.strip() or not email.strip():
-                        st.error("Nama Perusahaan, No. Induk, Responden, dan Email wajib diisi!")
+                    if not nama_pt.strip() or not nib.strip() or not responden.strip() or not email.strip() or not nama_jalan.strip() or not kota_kab.strip():
+                        st.error("Nama Perusahaan, No. Induk, Nama Jalan, Kota/Kabupaten, Responden, dan Email wajib diisi!")
                     else:
+                        lokasi_full = ", ".join([p.strip() for p in [nama_jalan, kota_kab, provinsi] if p.strip()])
+                        _, ext_gmaps, _ = build_gmaps_urls(nama_jalan, kota_kab, provinsi, gmaps_tag)
                         new_key = f"HIBB-{uuid.uuid4().hex[:6].upper()}"
                         st.session_state.company_data = {
                             "Company Key": new_key,
@@ -539,7 +676,12 @@ if st.session_state.active_role == "🏢 Perusahaan":
                             "Legalitas": legalitas,
                             "No Induk Perusahaan": nib.strip(),
                             "No Telp Perusahaan": telepon.strip(),
-                            "Lokasi Pengujian": lokasi.strip(),
+                            "Nama Jalan": nama_jalan.strip(),
+                            "Kota/Kabupaten": kota_kab.strip(),
+                            "Provinsi": provinsi,
+                            "Tag Google Maps": gmaps_tag.strip(),
+                            "Link Google Maps": ext_gmaps,
+                            "Lokasi Pengujian": lokasi_full,
                             "Nama Responden": responden.strip(),
                             "Jabatan": jabatan.strip(),
                             "Email Responden": email.strip(),
@@ -554,6 +696,10 @@ if st.session_state.active_role == "🏢 Perusahaan":
                         st.session_state.daftar_gedung = []
                         st.session_state.perusahaan_step = "info_gedung"
                         st.rerun()
+
+            # Tampilkan pratinjau peta interaktif jika user menekan tombol pratinjau atau sudah mengisi alamat
+            if st.session_state.company_data.get("Nama Jalan") or st.session_state.company_data.get("Tag Google Maps"):
+                render_gmaps_location_box(st.session_state.company_data, show_map_default=True)
 
         # TAB 2: SUDAH PERNAH ASESMEN (MASUKKAN COMPANY KEY)
         with tab_key_lama:
@@ -607,6 +753,7 @@ if st.session_state.active_role == "🏢 Perusahaan":
                     <p><b>Jumlah Gedung Terdaftar:</b> {len(st.session_state.daftar_gedung)} Gedung</p>
                 </div>
                 """, unsafe_allow_html=True)
+                render_gmaps_location_box(c_data, show_map_default=False)
 
                 col_lanjut_a, col_lanjut_b = st.columns(2)
                 with col_lanjut_a:
@@ -629,7 +776,7 @@ if st.session_state.active_role == "🏢 Perusahaan":
             with col_a:
                 nama_gedung = st.text_input(
                     f"Nama / Identitas Gedung ke-{nomor_gedung}*",
-                    placeholder="Contoh: Gedung Perkantoran Pusat / Pabrik Line 1 / Gudang Logistik"
+                    placeholder="Contoh: Gedung Perkantoran Pusat / Pabrik Line 1 / Unit Kantor Mall Lt. 3"
                 )
                 jenis_objek = st.selectbox("Klasifikasi Objek Bangunan:", [
                     "1. Perkantoran",
@@ -640,6 +787,20 @@ if st.session_state.active_role == "🏢 Perusahaan":
                     "6. Bangunan Bawah Tanah / Basement",
                     "7. Tempat Kerja Lainnya"
                 ])
+                status_pengelolaan_gedung = st.selectbox(
+                    "Status Kepemilikan & Pengelolaan Gedung:*",
+                    [
+                        "Milik Sendiri (Dikelola Internal Perusahaan)",
+                        "Sewa – Milik Bersama (Dikelola Bersama Penyewa Lain)",
+                        "Sewa – Dikelola Pihak Ketiga (Building Management / Pengelola Mall)"
+                    ],
+                    help="Pilih apakah gedung ini milik sendiri, disewa dan dikelola bersama-sama dengan penyewa lain, atau disewa dan dikelola oleh pihak ketiga (seperti pengelola mall/office tower)."
+                )
+                perusahaan_pengelola_gedung = st.text_input(
+                    "Nama Perusahaan Pengelola / Mitra Penyewa Bersama (Wajib diisi jika Sewa):",
+                    placeholder="Contoh: PT Building Management Mall X / Bersama PT Mitra A & PT Mitra B",
+                    help="Tuliskan nama perusahaan pengelola pihak ketiga (jika dikelola pihak ketiga) atau daftar perusahaan yang mengelola bersama (jika milik/kelola bersama). Kosongkan bila milik sendiri."
+                )
 
             with col_b:
                 total_pekerja = st.number_input("Total Pekerja di Gedung Ini*", min_value=1, value=25, step=1)
@@ -652,7 +813,7 @@ if st.session_state.active_role == "🏢 Perusahaan":
 
             st.markdown("---")
             st.markdown("#### 📋 Checklist Fasilitas yang Ada di Gedung Ini:")
-            st.write("Centang fasilitas yang benar-benar ada. Kuesioner hanya akan menampilkan pertanyaan sesuai fasilitas yang Anda pilih.")
+            st.write("Centang fasilitas yang benar-benar ada. Seluruh pertanyaan untuk fasilitas yang dipilih akan tetap ditampilkan baik untuk gedung milik sendiri, sewa milik bersama, maupun sewa dikelola pihak ketiga.")
 
             selected_fac_ids = []
             cols_fac = st.columns(2)
@@ -672,16 +833,27 @@ if st.session_state.active_role == "🏢 Perusahaan":
             btn_mulai_soal = st.form_submit_button("Lanjut ke Pertanyaan Fasilitas ➔", type="primary", width="stretch")
 
             if btn_mulai_soal:
+                is_sewa = "Sewa" in status_pengelolaan_gedung
                 if not nama_gedung.strip():
                     st.error("Nama Gedung wajib diisi!")
+                elif is_sewa and not perusahaan_pengelola_gedung.strip():
+                    st.error("Untuk gedung berstatus Sewa (Milik Bersama / Dikelola Pihak Ketiga), Nama Perusahaan Pengelola / Mitra Penyewa Bersama wajib diisi agar tampil pada hasil asesmen!")
                 elif not selected_fac_ids:
                     st.error("Pilih minimal satu kelompok fasilitas yang ada di gedung ini!")
                 else:
+                    nama_pt_utama = st.session_state.company_data.get("Nama Perusahaan", "-")
+                    pengelola_final = (
+                        perusahaan_pengelola_gedung.strip()
+                        if perusahaan_pengelola_gedung.strip()
+                        else f"Internal ({nama_pt_utama})"
+                    )
                     st.session_state.current_gedung = {
                         "Company Key": st.session_state.company_data.get("Company Key"),
                         "Nomor Gedung": nomor_gedung,
                         "Nama Gedung": nama_gedung.strip(),
                         "Jenis Objek": jenis_objek,
+                        "Status Pengelolaan Gedung": status_pengelolaan_gedung,
+                        "Perusahaan Pengelola Gedung": pengelola_final,
                         "Total Pekerja": total_pekerja,
                         "Pekerja Laki-laki": pekerja_pria,
                         "Pekerja Perempuan": pekerja_wanita,
@@ -701,10 +873,18 @@ if st.session_state.active_role == "🏢 Perusahaan":
     elif st.session_state.perusahaan_step == "kuesioner_fasilitas":
         current_g = st.session_state.current_gedung
         st.subheader(f"Langkah 3: Pertanyaan Sesuai Fasilitas — {current_g.get('Nama Gedung')}")
-        st.caption(f"Jumlah Pekerja: {current_g.get('Total Pekerja')} orang | Fasilitas Terpilih: {len(st.session_state.selected_facilities)} Kelompok")
+        st.caption(
+            f"**Status Pengelolaan:** {current_g.get('Status Pengelolaan Gedung', 'Milik Sendiri')} | "
+            f"**Perusahaan Pengelola / Pengguna Bersama:** {current_g.get('Perusahaan Pengelola Gedung', '-')} | "
+            f"**Jumlah Pekerja:** {current_g.get('Total Pekerja')} orang | "
+            f"**Fasilitas Terpilih:** {len(st.session_state.selected_facilities)} Kelompok"
+        )
 
         # Khusus input jumlah toilet jika fasilitas toilet dipilih
-        if "toilet" in st.session_state.selected_facilities or "toilet_sanitasi" in st.session_state.selected_facilities:
+        st.session_state.selected_facilities = normalize_fasilitas_ids(st.session_state.selected_facilities)
+        jml_disabilitas_gedung = to_int(current_g.get("Pekerja Disabilitas", 0))
+
+        if "toilet_sanitasi" in st.session_state.selected_facilities:
             st.markdown("### 🚻 Evaluasi Rasio Jumlah Toilet Gedung:")
             syarat_toilet = hitung_kebutuhan_toilet(to_int(current_g.get("Total Pekerja", 0)))
             col_t1, col_t2 = st.columns([1, 2])
@@ -721,11 +901,11 @@ if st.session_state.active_role == "🏢 Perusahaan":
                 st.info(f"**Standar Permenaker No. 5/2018:** Kebutuhan minimal untuk {current_g.get('Total Pekerja')} pekerja adalah **{syarat_toilet} toilet**.  \nStatus: **{status_toilet}**")
 
         st.info(
-            "💡 **Panduan Kriteria Penilaian (Sheet 'Panduan Pengisian'):**  \n"
-            "- 🟢 **Memenuhi (Bobot 2):** Persyaratan diterapkan, berfungsi, dan didukung bukti objektif yang memadai.  \n"
-            "- 🟡 **Memenuhi Sebagian (Bobot 1):** Ada sebagian pelaksanaan tetapi belum konsisten, belum mencakup seluruh area/shift, atau tindak lanjut belum lengkap.  \n"
-            "- 🔴 **Tidak Memenuhi (Bobot 0):** Tidak tersedia, tidak berfungsi, atau tidak ada bukti yang memadai.  \n"
-            "*(Khusus butir **A10, A13, A14** menggunakan pilihan **Ya** (bobot 2) dan **Tidak** (bobot 0))*"
+            "💡 **Panduan Pengisian Instrumen ('Matriks Penilaian (2)'):**  \n"
+            "- Pilihan jawaban untuk setiap pertanyaan adalah **Iya** (Skor 1) dan **Tidak** (Skor 0).  \n"
+            "- **Arahkan kursor** pada tombol **💡 Panduan Penilaian** di bawah setiap pertanyaan untuk melihat pop-up infografis kriteria pemenuhan dan dasar regulasinya.  \n"
+            f"- **Pekerja Penyandang Disabilitas di Gedung Ini:** **{jml_disabilitas_gedung} orang** "
+            f"({'Pertanyaan khusus disabilitas **GD2.4, TL7.14, TL7.15, TL7.16** aktif' if jml_disabilitas_gedung > 0 else 'Pertanyaan khusus disabilitas **GD2.4, TL7.14, TL7.15, TL7.16** otomatis dilewati'})."
         )
 
         st.markdown("---")
@@ -737,95 +917,72 @@ if st.session_state.active_role == "🏢 Perusahaan":
         for idx, fac in enumerate(fasilitas_aktif):
             with tabs[idx]:
                 st.markdown(f"#### {fac['icon']} {fac['nama']}")
-                st.caption(fac["deskripsi"])
+                st.caption(f"Kode Kategori: **{fac.get('kode_kategori', '-')}** | {fac['deskripsi']}")
 
                 for q_id in fac["soal_ids"]:
                     q_data = MASTER_PERTANYAAN.get(q_id)
                     if not q_data:
                         continue
 
-                    # Pemeriksaan dependensi (contoh saluran pembuangan air halaman A6 & A7 bergantung pada A5)
-                    if q_data.get("depends_on") == "A5":
-                        ans_a5 = str(current_g.get("A5_Jawaban", "")).lower()
-                        if "tidak" in ans_a5:
-                            st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} dilewati karena tidak ada saluran air pembuangan di halaman.*")
-                            current_g[f"{q_id}_Jawaban"] = "Tidak berlaku (N/A)"
+                    # 1. Cek apakah pertanyaan khusus disabilitas (GD2.4, TL7.14, TL7.15, TL7.16)
+                    if q_data.get("khusus_disabilitas") and jml_disabilitas_gedung <= 0:
+                        st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} — Dilewati karena tidak ada pekerja penyandang disabilitas di gedung ini.*")
+                        current_g[f"{q_id}_Jawaban"] = "N/A (Tidak ada pekerja disabilitas)"
+                        current_g[f"{q_id}_Poin"] = 0
+                        continue
+
+                    # 2. Cek apakah HL1.1 dijawab Tidak (tidak ada halaman)
+                    if q_id != "HL1.1" and q_data["kelompok"] == "halaman":
+                        if str(current_g.get("HL1.1_Jawaban", "Iya")).strip().lower() == "tidak":
+                            st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} — Dilewati karena gedung tidak memiliki halaman (HL1.1 = Tidak).*")
+                            current_g[f"{q_id}_Jawaban"] = "N/A (Tidak ada halaman)"
                             current_g[f"{q_id}_Poin"] = 0
                             continue
 
-                    col_q_title, col_q_pop = st.columns([4, 1.2])
-                    with col_q_title:
-                        st.markdown(f"**[{q_id}] {q_data['teks']}**")
-                    with col_q_pop:
-                        render_konteks_popover(q_data)
+                    # 3. Pemeriksaan dependensi saluran pembuangan air halaman (HL1.8 & HL1.9 bergantung pada HL1.7)
+                    if q_data.get("depends_on") == "HL1.7":
+                        ans_hl1_7 = str(current_g.get("HL1.7_Jawaban", "Iya")).strip().lower()
+                        if ans_hl1_7 == "tidak":
+                            st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} — Dilewati karena tidak terdapat saluran air pembuangan di halaman (HL1.7 = Tidak).*")
+                            current_g[f"{q_id}_Jawaban"] = "N/A (Tidak ada saluran air)"
+                            current_g[f"{q_id}_Poin"] = 0
+                            continue
 
-                    # Pop-up Infografis jika pertanyaan memiliki istilah khusus
-                    if q_id in INFOGRAFIS_DATA:
-                        render_infografis_hover_html(q_id)
+                    label_disabilitas = " &nbsp;<span style='background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;'>♿ Khusus Disabilitas</span>" if q_data.get("khusus_disabilitas") else ""
+                    label_reverse = " &nbsp;<span style='background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-size:0.75rem;font-weight:700;'>⚠️ Pilih 'Tidak' jika kondisi baik (Skor 1)</span>" if q_data.get("reverse_score") else ""
 
-                    help_tooltip = f"📌 Definisi Operasional:\n{q_data.get('definisi', '')}\n\n🔍 Bukti Objektif:\n{q_data.get('bukti', '')}"
+                    st.markdown(
+                        f"**[{q_id}] {q_data['teks']}** <span style='color:#64748b;font-size:0.82rem;'>({q_data['kode_kategori']} – {q_data['kategori']})</span>{label_disabilitas}{label_reverse}",
+                        unsafe_allow_html=True
+                    )
 
-                    # 1. Pertanyaan Screening Saluran Air (A5)
-                    if q_data["tipe"] == "screening_saluran":
-                        curr_ans = current_g.get(f"{q_id}_Jawaban", q_data["opsi"][0])
-                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
-                        chosen = st.radio(
-                            label=f"Pilihan untuk {q_id}:",
-                            options=q_data["opsi"],
-                            index=ans_idx,
-                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
-                            label_visibility="collapsed",
-                            help=help_tooltip
-                        )
-                        current_g[f"{q_id}_Jawaban"] = chosen
-                        current_g[f"{q_id}_Poin"] = 0
+                    # Pop-up Infografis ketika dihover (Kolom E)
+                    render_infografis_hover_html(q_id)
 
-                    # 2. Pertanyaan Info Toilet (B1)
-                    elif q_data["tipe"] == "info_toilet":
-                        curr_ans = current_g.get(f"{q_id}_Jawaban", q_data["opsi"][0])
-                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
-                        chosen = st.radio(
-                            label=f"Pilihan untuk {q_id}:",
-                            options=q_data["opsi"],
-                            index=ans_idx,
-                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
-                            label_visibility="collapsed",
-                            help=help_tooltip
-                        )
-                        current_g[f"{q_id}_Jawaban"] = chosen
-                        current_g[f"{q_id}_Poin"] = 0
+                    # Default pilihan cerdas (khusus TL7.12 mengikuti rasio toilet, butir terbalik default 'Tidak')
+                    default_opt = "Tidak" if q_data.get("reverse_score") else "Iya"
+                    if q_id == "TL7.12":
+                        t_avail = to_int(current_g.get("Jumlah Toilet", 0))
+                        t_need = hitung_kebutuhan_toilet(to_int(current_g.get("Total Pekerja", 0)))
+                        default_opt = "Iya" if t_avail >= t_need else "Tidak"
 
-                    # 3. Pertanyaan Iya / Tidak (A10, A13, A14)
-                    elif q_data["tipe"] == "ya_tidak":
-                        curr_ans = current_g.get(f"{q_id}_Jawaban", "Ya")
-                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
-                        chosen = st.radio(
-                            label=f"Pilihan untuk {q_id} (Ya / Tidak):",
-                            options=q_data["opsi"],
-                            index=ans_idx,
-                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
-                            label_visibility="collapsed",
-                            help=help_tooltip
-                        )
-                        score = NILAI_OPSI.get(chosen, 2 if chosen == "Ya" else 0)
-                        current_g[f"{q_id}_Jawaban"] = chosen
-                        current_g[f"{q_id}_Poin"] = score
+                    curr_ans = current_g.get(f"{q_id}_Jawaban", default_opt)
+                    if curr_ans == "Ya":
+                        curr_ans = "Iya"
+                    ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
 
-                    # 4. Pertanyaan Standar 3 Pilihan (Memenuhi, Memenuhi Sebagian, Tidak Memenuhi)
-                    else:
-                        curr_ans = current_g.get(f"{q_id}_Jawaban", "Memenuhi")
-                        ans_idx = q_data["opsi"].index(curr_ans) if curr_ans in q_data["opsi"] else 0
-                        chosen = st.radio(
-                            label=f"Pilihan untuk {q_id}:",
-                            options=q_data["opsi"],
-                            index=ans_idx,
-                            key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
-                            label_visibility="collapsed",
-                            help=help_tooltip
-                        )
-                        score = NILAI_OPSI.get(chosen, 0)
-                        current_g[f"{q_id}_Jawaban"] = chosen
-                        current_g[f"{q_id}_Poin"] = score
+                    chosen = st.radio(
+                        label=f"Pilihan untuk {q_id} (Iya / Tidak):",
+                        options=q_data["opsi"],
+                        index=ans_idx,
+                        key=f"radio_{q_id}_{current_g.get('Nomor Gedung')}",
+                        label_visibility="collapsed",
+                        horizontal=True,
+                        help=f"{q_data['panduan']} ({q_data['regulasi']})"
+                    )
+                    score = hitung_skor_opsi(q_id, chosen)
+                    current_g[f"{q_id}_Jawaban"] = chosen
+                    current_g[f"{q_id}_Poin"] = score
 
                     st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
@@ -838,7 +995,6 @@ if st.session_state.active_role == "🏢 Perusahaan":
 
         with c_btn2:
             if st.button("Simpan Data Gedung & Lanjut ke Hasil ➔", type="primary", width="stretch"):
-                # Hitung skor lengkap per aspek dan kategori sesuai sheet 'Ringkasan Skor'
                 skor_res = hitung_skor_lengkap_gedung(current_g, st.session_state.selected_facilities)
 
                 current_g["Skor_Topik_1"] = skor_res["Skor_Topik_1"]
@@ -884,6 +1040,8 @@ if st.session_state.active_role == "🏢 Perusahaan":
             _Simpan kode ini untuk melanjutkan survei atau diberikan kepada Penguji K3 (PJK3 / Balai K3)._
             """)
 
+        render_gmaps_location_box(st.session_state.company_data, show_map_default=False)
+
         # Tampilkan Evaluasi Toilet Mandiri + Kumulatif
         render_evaluasi_toilet_card(st.session_state.daftar_gedung)
 
@@ -897,6 +1055,8 @@ if st.session_state.active_role == "🏢 Perusahaan":
                 "No": g.get("Nomor Gedung"),
                 "Nama Gedung": g.get("Nama Gedung"),
                 "Jenis Objek": g.get("Jenis Objek"),
+                "Status Pengelolaan": g.get("Status Pengelolaan Gedung", "Milik Sendiri"),
+                "Perusahaan Pengelola / Bersama": g.get("Perusahaan Pengelola Gedung", "-"),
                 "Total Pekerja": g.get("Total Pekerja"),
                 "Fisik (T1)": g.get("Skor_Topik_1"),
                 "Sanitasi (T2)": g.get("Skor_Topik_2"),
@@ -913,18 +1073,22 @@ if st.session_state.active_role == "🏢 Perusahaan":
         # Tampilkan poin-poin yang kurang untuk setiap gedung
         for idx, g in enumerate(st.session_state.daftar_gedung):
             nama_g = g.get("Nama Gedung", f"Gedung {idx+1}")
-            skor_tot = g.get('Total Poin Gedung', 0)
-            skor_max_t = g.get('Skor Maksimal Tersedia', 100)
+            fac_ids = normalize_fasilitas_ids(g.get("Fasilitas Terpilih", []))
+            skor_info_g = hitung_skor_lengkap_gedung(g, fac_ids)
+            skor_tot = g.get('Total Poin Gedung', skor_info_g['total_skor'])
+            skor_max_t = g.get('Skor Maksimal Tersedia', skor_info_g['skor_maks_tersedia'])
             st_pem = g.get('Status Pemenuhan', '-')
+            st_kelola = g.get('Status Pengelolaan Gedung', 'Milik Sendiri (Dikelola Internal Perusahaan)')
+            pt_kelola = g.get('Perusahaan Pengelola Gedung', '-')
             with st.expander(f"🏢 **{nama_g}** — Skor: {skor_tot} / {skor_max_t} ({st_pem})", expanded=True):
+                st.caption(f"🏷️ **Status Gedung:** {st_kelola} &nbsp;|&nbsp; 🏢 **Perusahaan Pengelola / Bersama:** **{pt_kelola}**")
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Bangunan Kerja (A)", f"{g.get('Skor_Topik_1', '-')} / 25")
-                c2.metric("Kebersihan (B)", f"{g.get('Skor_Topik_2', '-')} / 25")
-                c3.metric("Kebutuhan Udara (C)", f"{g.get('Skor_Topik_3', '-')} / 25")
-                c4.metric("Housekeeping (D)", f"{g.get('Skor_Topik_4', '-')} / 25")
+                c1.metric("Kondisi Fisik", f"{g.get('Skor_Topik_1', '-')} Poin")
+                c2.metric("Fasilitas Kebersihan", f"{g.get('Skor_Topik_2', '-')} Poin")
+                c3.metric("Kebutuhan Udara", f"{g.get('Skor_Topik_3', '-')} Poin")
+                c4.metric("Housekeeping", f"{g.get('Skor_Topik_4', '-')} Poin")
 
-                st.markdown("##### 📊 Matriks Capaian Skor Per Aspek (Sheet 'Ringkasan Skor'):")
-                fac_ids = g.get("Fasilitas Terpilih")
+                st.markdown("##### 📊 Matriks Capaian Skor Per Kategori ('Matriks Penilaian (2)'):")
                 render_tabel_ringkasan_skor(g, fac_ids)
 
                 render_poin_kurang_gedung(g, fac_ids)
@@ -1061,6 +1225,7 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                     <p><b>Lokasi:</b> {comp_row.get('Lokasi Pengujian', '-')} | <b>Sektor:</b> {comp_row.get('Jenis Usaha (KBLI)', '-')} | <b>Responden:</b> {comp_row.get('Nama Responden', '-')} ({comp_row.get('Email Responden', '-')})</p>
                 </div>
                 """, unsafe_allow_html=True)
+                render_gmaps_location_box(comp_row, show_map_default=False)
 
                 st.markdown("---")
                 st.markdown("### 📝 Identitas Lembaga & Ahli K3 Penguji")
@@ -1104,7 +1269,12 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                             total_pekerja_g = to_int(g_verif.get("Total Pekerja", 20))
 
                             st.markdown(f"#### Evaluasi Lapangan: {nama_g}")
-                            st.caption(f"Klasifikasi: {g_verif.get('Jenis Objek', '-')} | Tenaga Kerja: {total_pekerja_g} orang (Pria: {g_verif.get('Pekerja Laki-laki', 0)}, Wanita: {g_verif.get('Pekerja Perempuan', 0)})")
+                            st.caption(
+                                f"**Klasifikasi:** {g_verif.get('Jenis Objek', '-')} | "
+                                f"**Status Gedung:** {g_verif.get('Status Pengelolaan Gedung', 'Milik Sendiri')} | "
+                                f"**Perusahaan Pengelola / Bersama:** **{g_verif.get('Perusahaan Pengelola Gedung', '-')}** | "
+                                f"**Tenaga Kerja:** {total_pekerja_g} orang (Pria: {g_verif.get('Pekerja Laki-laki', 0)}, Wanita: {g_verif.get('Pekerja Perempuan', 0)})"
+                            )
 
                             # 1. Verifikasi Toilet di Lapangan
                             st.markdown("##### 🚻 1. Verifikasi Ketersediaan & Rasio Jamban/Toilet:")
@@ -1126,97 +1296,76 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                             st.markdown("---")
 
                             # 2. Verifikasi Fasilitas (Checklist)
-                            fasilitas_terpilih = g_verif.get("Fasilitas Terpilih", [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]])
+                            fasilitas_terpilih = normalize_fasilitas_ids(g_verif.get("Fasilitas Terpilih", []))
                             fasilitas_aktif_v = [f for f in KELOMPOK_FASILITAS if f["id"] in fasilitas_terpilih]
+                            jml_disabilitas_v = to_int(g_verif.get("Pekerja Disabilitas", 0))
 
                             tabs_sub_soal = st.tabs([f"{f['icon']} {f['nama']}" for f in fasilitas_aktif_v])
 
                             for f_idx, fac in enumerate(fasilitas_aktif_v):
                                 with tabs_sub_soal[f_idx]:
-                                    st.markdown(f"**Verifikasi Bidang:** {fac['nama']}")
+                                    st.markdown(f"**Verifikasi Bidang:** {fac['nama']} (`{fac.get('kode_kategori', '-')}`)")
 
                                     for q_id in fac["soal_ids"]:
                                         q_data = MASTER_PERTANYAAN.get(q_id)
                                         if not q_data:
                                             continue
 
-                                        # Pemeriksaan dependensi saluran air
-                                        if q_data.get("depends_on") == "A5":
-                                            ans_a5_v = str(g_verif.get("A5_Jawaban", "")).lower()
-                                            if "tidak" in ans_a5_v:
-                                                st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} dilewati karena tidak ada saluran air pembuangan di halaman.*")
-                                                g_verif[f"{q_id}_Jawaban"] = "Tidak berlaku (N/A)"
+                                        # 1. Cek disabilitas
+                                        if q_data.get("khusus_disabilitas") and jml_disabilitas_v <= 0:
+                                            st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} — Dilewati karena tidak ada pekerja penyandang disabilitas.*")
+                                            g_verif[f"{q_id}_Jawaban"] = "N/A (Tidak ada pekerja disabilitas)"
+                                            g_verif[f"{q_id}_Poin"] = 0
+                                            continue
+
+                                        # 2. Cek HL1.1
+                                        if q_id != "HL1.1" and q_data["kelompok"] == "halaman":
+                                            if str(g_verif.get("HL1.1_Jawaban", "Iya")).strip().lower() == "tidak":
+                                                st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} — Dilewati karena tidak ada halaman.*")
+                                                g_verif[f"{q_id}_Jawaban"] = "N/A (Tidak ada halaman)"
                                                 g_verif[f"{q_id}_Poin"] = 0
                                                 continue
 
-                                        col_vq_t, col_vq_p = st.columns([4, 1.2])
-                                        with col_vq_t:
-                                            st.markdown(f"**[{q_id}] {q_data['teks']}**")
-                                        with col_vq_p:
-                                            render_konteks_popover(q_data)
+                                        # 3. Pemeriksaan dependensi saluran air (HL1.8 & HL1.9 bergantung pada HL1.7)
+                                        if q_data.get("depends_on") == "HL1.7":
+                                            ans_hl1_7_v = str(g_verif.get("HL1.7_Jawaban", "Iya")).strip().lower()
+                                            if ans_hl1_7_v == "tidak":
+                                                st.caption(f"ℹ️ *[{q_id}] {q_data['teks']} — Dilewati karena tidak ada saluran air pembuangan di halaman.*")
+                                                g_verif[f"{q_id}_Jawaban"] = "N/A (Tidak ada saluran air)"
+                                                g_verif[f"{q_id}_Poin"] = 0
+                                                continue
 
-                                        # Pop-up Infografis
-                                        if q_id in INFOGRAFIS_DATA:
-                                            render_infografis_hover_html(q_id)
+                                        st.markdown(f"**[{q_id}] {q_data['teks']}** *({q_data['kode_kategori']} – {q_data['kategori']})*")
+
+                                        # Pop-up Infografis ketika dihover (Kolom E)
+                                        render_infografis_hover_html(q_id)
 
                                         # Tampilkan jawaban mandiri perusahaan sebagai referensi penguji
                                         jawaban_awal_pt = g_verif.get(f"{q_id}_Jawaban", "Belum terisi")
                                         st.caption(f"📌 *Jawaban Mandiri Perusahaan:* **{jawaban_awal_pt}**")
 
-                                        # Input Verifikasi oleh Penguji K3
-                                        if q_data["tipe"] == "screening_saluran":
-                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", q_data["opsi"][0])
-                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
-                                            chosen_v = st.radio(
-                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}):",
-                                                options=q_data["opsi"],
-                                                index=v_idx,
-                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
-                                            )
-                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
-                                            g_verif[f"{q_id}_Poin"] = 0
+                                        # Input Verifikasi oleh Penguji K3 (Iya / Tidak)
+                                        default_v = "Tidak" if q_data.get("reverse_score") else "Iya"
+                                        curr_v_ans = g_verif.get(f"{q_id}_Jawaban", default_v)
+                                        if curr_v_ans == "Ya":
+                                            curr_v_ans = "Iya"
+                                        v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
 
-                                        elif q_data["tipe"] == "info_toilet":
-                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", q_data["opsi"][0])
-                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
-                                            chosen_v = st.radio(
-                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}):",
-                                                options=q_data["opsi"],
-                                                index=v_idx,
-                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
-                                            )
-                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
-                                            g_verif[f"{q_id}_Poin"] = 0
-
-                                        elif q_data["tipe"] == "ya_tidak":
-                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", "Ya")
-                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
-                                            chosen_v = st.radio(
-                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}) [Ya / Tidak]:",
-                                                options=q_data["opsi"],
-                                                index=v_idx,
-                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
-                                            )
-                                            score_v = NILAI_OPSI.get(chosen_v, 2 if chosen_v == "Ya" else 0)
-                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
-                                            g_verif[f"{q_id}_Poin"] = score_v
-
-                                        else:
-                                            curr_v_ans = g_verif.get(f"{q_id}_Jawaban", "Memenuhi")
-                                            v_idx = q_data["opsi"].index(curr_v_ans) if curr_v_ans in q_data["opsi"] else 0
-                                            chosen_v = st.radio(
-                                                label=f"Hasil Pengujian Lapangan K3 ({q_id}):",
-                                                options=q_data["opsi"],
-                                                index=v_idx,
-                                                key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}"
-                                            )
-                                            score_v = NILAI_OPSI.get(chosen_v, 0)
-                                            g_verif[f"{q_id}_Jawaban"] = chosen_v
-                                            g_verif[f"{q_id}_Poin"] = score_v
+                                        chosen_v = st.radio(
+                                            label=f"Hasil Pengujian Lapangan K3 ({q_id}) [Iya / Tidak]:",
+                                            options=q_data["opsi"],
+                                            index=v_idx,
+                                            horizontal=True,
+                                            key=f"pjk3_radio_{q_id}_{g_idx}_{active_key}",
+                                            help=f"{q_data['panduan']} ({q_data['regulasi']})"
+                                        )
+                                        score_v = hitung_skor_opsi(q_id, chosen_v)
+                                        g_verif[f"{q_id}_Jawaban"] = chosen_v
+                                        g_verif[f"{q_id}_Poin"] = score_v
 
                                         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
 
-                            # Hitung ulang skor terverifikasi untuk gedung ini sesuai sheet 'Ringkasan Skor'
+                            # Hitung ulang skor terverifikasi untuk gedung ini sesuai sheet 'Matriks Penilaian (2)'
                             skor_res_v = hitung_skor_lengkap_gedung(g_verif, fasilitas_terpilih)
                             g_verif["Skor_Topik_1"] = skor_res_v["Skor_Topik_1"]
                             g_verif["Skor_Topik_2"] = skor_res_v["Skor_Topik_2"]
@@ -1388,7 +1537,8 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                 tampil_p_cols = [
                     c for c in [
                         "Waktu Pengisian", "Company Key", "Nama Perusahaan", "Legalitas",
-                        "Jenis Usaha (KBLI)", "Lokasi Pengujian", "Nama Responden", "Status Verifikasi", "Catatan Verifikator"
+                        "Jenis Usaha (KBLI)", "Nama Jalan", "Kota/Kabupaten", "Provinsi",
+                        "Lokasi Pengujian", "Link Google Maps", "Nama Responden", "Status Verifikasi", "Catatan Verifikator"
                     ] if c in filtered_p.columns
                 ]
                 st.dataframe(filtered_p[tampil_p_cols], width="stretch")
@@ -1425,6 +1575,7 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                         <p><b>Catatan Verifikator:</b> {pt_row.get('Catatan Verifikator', '-')}</p>
                     </div>
                     """, unsafe_allow_html=True)
+                    render_gmaps_location_box(pt_row, show_map_default=False)
 
                     # 1. Tampilkan Evaluasi Toilet Mandiri + Kumulatif
                     render_evaluasi_toilet_card(pt_gedung_list)
@@ -1438,14 +1589,17 @@ elif st.session_state.active_role == "🛡️ PJK3 / Balai K3":
                         for idx_g, g_item in enumerate(pt_gedung_list):
                             nama_bg = g_item.get("Nama Gedung", f"Gedung {idx_g+1}")
                             st_pemenuhan = g_item.get("Status Pemenuhan", "-")
+                            st_kelola_h = g_item.get("Status Pengelolaan Gedung", "Milik Sendiri (Dikelola Internal Perusahaan)")
+                            pt_kelola_h = g_item.get("Perusahaan Pengelola Gedung", "-")
                             with st.expander(f"🏢 **{nama_bg}** — Skor Total: {g_item.get('Total Poin Gedung', 0)} ({st_pemenuhan})", expanded=True):
+                                st.caption(f"🏷️ **Status Gedung:** {st_kelola_h} &nbsp;|&nbsp; 🏢 **Perusahaan Pengelola / Bersama:** **{pt_kelola_h}**")
                                 c_m1, c_m2, c_m3, c_m4 = st.columns(4)
-                                c_m1.metric("Bangunan Kerja (A)", f"{g_item.get('Skor_Topik_1', '-')} / 25")
-                                c_m2.metric("Kebersihan (B)", f"{g_item.get('Skor_Topik_2', '-')} / 25")
-                                c_m3.metric("Kebutuhan Udara (C)", f"{g_item.get('Skor_Topik_3', '-')} / 25")
-                                c_m4.metric("Housekeeping (D)", f"{g_item.get('Skor_Topik_4', '-')} / 25")
+                                c_m1.metric("Kondisi Fisik", f"{g_item.get('Skor_Topik_1', '-')} Poin")
+                                c_m2.metric("Fasilitas Kebersihan", f"{g_item.get('Skor_Topik_2', '-')} Poin")
+                                c_m3.metric("Kebutuhan Udara", f"{g_item.get('Skor_Topik_3', '-')} Poin")
+                                c_m4.metric("Housekeeping", f"{g_item.get('Skor_Topik_4', '-')} Poin")
 
-                                st.markdown("##### 📊 Matriks Capaian Skor Per Aspek:")
+                                st.markdown("##### 📊 Matriks Capaian Skor Per Kategori:")
                                 render_tabel_ringkasan_skor(g_item, g_item.get("Fasilitas Terpilih"))
 
                                 render_poin_kurang_gedung(g_item)

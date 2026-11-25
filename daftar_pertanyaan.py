@@ -1,4 +1,5 @@
 import math
+import re
 
 def to_int(val, default=0) -> int:
     """Konversi nilai aman ke integer (mendukung float string seperti '8.0', int, float, None, string kosong)."""
@@ -14,1037 +15,481 @@ def to_int(val, default=0) -> int:
 
 
 # ==============================================================================
-# PILIHAN JAWABAN & PANDUAN PENGISIAN
-# (Sesuai Sheet 'Panduan Pengisian' & Revisi Instrumen HIBB)
+# PILIHAN JAWABAN: HANYA IYA DAN TIDAK (SKOR 1 DAN 0)
 # ==============================================================================
-OPT_3_TINGKAT = [
-    "Memenuhi",
-    "Memenuhi Sebagian",
-    "Tidak Memenuhi"
-]
-
-OPT_YA_TIDAK = [
-    "Ya",
-    "Tidak"
-]
+OPT_IYA_TIDAK = ["Iya", "Tidak"]
+OPT_YA_TIDAK = OPT_IYA_TIDAK
+OPT_3_TINGKAT = OPT_IYA_TIDAK
 
 NILAI_OPSI = {
-    "Memenuhi": 2,
-    "Memenuhi Sebagian": 1,
-    "Tidak Memenuhi": 0,
-    "Ya": 2,
-    "Tidak": 0,
-    "Iya": 2,
+    "Iya": 1,
+    "Ya": 1,
+    "Tidak": 0
 }
 
-PANDUAN_PENGISIAN = {
-    "Memenuhi": {
-        "skor": 2,
-        "makna": "Terpenuhi / Memenuhi",
-        "kriteria": "Persyaratan diterapkan, berfungsi, dan didukung bukti objektif yang memadai."
-    },
-    "Memenuhi Sebagian": {
-        "skor": 1,
-        "makna": "Terpenuhi Sebagian / Memenuhi Sebagian",
-        "kriteria": "Ada sebagian pelaksanaan tetapi belum konsisten, belum mencakup seluruh area/shift, atau tindak lanjut belum lengkap."
-    },
-    "Tidak Memenuhi": {
-        "skor": 0,
-        "makna": "Tidak Terpenuhi / Tidak Memenuhi",
-        "kriteria": "Tidak tersedia, tidak berfungsi, atau tidak ada bukti yang memadai."
-    },
-    "Ya": {
-        "skor": 2,
-        "makna": "Ya",
-        "kriteria": "Memenuhi ketentuan secara penuh dan didukung bukti objektif."
-    },
-    "Tidak": {
-        "skor": 0,
-        "makna": "Tidak",
-        "kriteria": "Belum / tidak memenuhi ketentuan yang dipersyaratkan."
-    }
-}
+# Daftar pertanyaan khusus jika ada pekerja penyandang disabilitas
+PERTANYAAN_DISABILITAS = {"GD2.4", "TL7.14", "TL7.15", "TL7.16"}
+
+# Daftar pertanyaan berkebalikan (skor 1 bila dijawab "Tidak", skor 0 bila "Iya")
+PERTANYAAN_TERBALIK = {"AT5.2", "AT5.3", "SP9.5"}
 
 
 # ==============================================================================
-# DAFTAR ASPEK / KELOMPOK FASILITAS (Kolom C Matriks Penilaian)
-# Dijadikan daftar fasilitas untuk dipilih jika gedung memiliki fasilitas tsb
+# DAFTAR KELOMPOK FASILITAS (Checklist pada tahap Isi Info Gedung)
+# Masih sama seperti sebelumnya
 # ==============================================================================
 KELOMPOK_FASILITAS = [
     {
         "id": "halaman",
+        "kode_kategori": "HL1",
         "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
+        "kategori": "Bangunan Tempat Kerja – Halaman",
         "nama": "Area Halaman & Saluran Pembuangan Luar",
         "icon": "🌳",
-        "deskripsi": "Kebersihan, kerapian, kerataan, genangan air, serta kelancaran saluran pembuangan air halaman",
-        "topik": "Bangunan Tempat Kerja",
+        "deskripsi": "Kebersihan, kerapian, kerataan, drainase halaman luar, dan penutup saluran air",
+        "topik": "Kondisi Fisik",
         "default_checked": True,
-        "soal_ids": ["A2", "A3", "A4", "A5", "A6", "A7"]
+        "soal_ids": ["HL1.1", "HL1.2", "HL1.3", "HL1.4", "HL1.5", "HL1.6", "HL1.7", "HL1.8", "HL1.9"]
     },
     {
-        "id": "gedung",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "nama": "Bangunan Gedung (Struktur, Dinding, Lantai, Langit-langit & Atap)",
+        "id": "struktur_gedung",
+        "kode_kategori": "GD2, DL3, LT4, AT5",
+        "aspek": "Struktur Gedung, Dinding, Lantai, Langit-langit & Atap",
+        "kategori": "Bangunan Tempat Kerja – Gedung",
+        "nama": "Struktur Gedung, Dinding, Lantai, Langit-langit & Atap",
         "icon": "🏢",
-        "deskripsi": "Kekokohan struktur, ruang gerak 2 m², kelembapan/kebersihan dinding, lantai tahan air/kimia, dan atap",
-        "topik": "Bangunan Tempat Kerja",
+        "deskripsi": "Kekokohan struktur gedung, kecukupan ruang gerak (2 m²), cat, kebersihan dinding/lantai/atap, dan ramp disabilitas",
+        "topik": "Kondisi Fisik",
         "default_checked": True,
-        "soal_ids": ["A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15", "A16", "A17", "A18", "A19"]
+        "soal_ids": [
+            "GD2.1", "GD2.2", "GD2.3",
+            "DL3.1", "DL3.2", "DL3.3", "DL3.4", "DL3.5", "DL3.6", "DL3.7", "DL3.8",
+            "LT4.1", "LT4.2", "LT4.3", "LT4.4", "LT4.5", "LT4.6",
+            "AT5.1", "AT5.2", "AT5.3",
+            "GD2.4"
+        ]
     },
     {
         "id": "bawah_tanah",
-        "aspek": "Ruang Bawah Tanah",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "nama": "Bangunan Bawah Tanah (Basement / Underground)",
+        "kode_kategori": "BT6",
+        "aspek": "Bangunan Bawah Tanah",
+        "kategori": "Bangunan Tempat Kerja – Bangunan Bawah Tanah",
+        "nama": "Bangunan Bawah Tanah (Basement / Confined Space)",
         "icon": "⛏️",
-        "deskripsi": "Kekuatan struktur bawah tanah, ventilasi, pencahayaan, saluran pembuangan, dan kebersihan",
-        "topik": "Bangunan Tempat Kerja",
+        "deskripsi": "Struktur bawah tanah, ventilasi, pencahayaan, saluran air, dan syarat ruang terbatas",
+        "topik": "Kondisi Fisik",
         "default_checked": False,
-        "soal_ids": ["A21", "A22", "A23", "A24", "A25"]
+        "soal_ids": ["BT6.1", "BT6.2", "BT6.3", "BT6.4", "BT6.5", "BT6.6"]
     },
     {
-        "id": "toilet",
-        "aspek": "Toilet",
-        "kategori": "B. Fasilitas Kebersihan",
-        "nama": "Fasilitas Toilet & Sanitasi",
+        "id": "toilet_sanitasi",
+        "kode_kategori": "TL7",
+        "aspek": "Toilet & Fasilitas Sanitasi",
+        "kategori": "Fasilitas Kebersihan – Toilet",
+        "nama": "Toilet & Fasilitas Sanitasi",
         "icon": "🚻",
-        "deskripsi": "Kecukupan rasio jumlah toilet terhadap pekerja, kebersihan, bebas bau, dan toilet ramah disabilitas",
+        "deskripsi": "Kecukupan rasio toilet, kebersihan, air bersih, kelengkapan sabun & wastafel, pemisahan toilet & akses disabilitas",
         "topik": "Fasilitas Kebersihan",
         "default_checked": True,
-        "soal_ids": ["B1", "B2", "B3", "B4"]
+        "soal_ids": [
+            "TL7.1", "TL7.2", "TL7.3", "TL7.4", "TL7.5", "TL7.6", "TL7.7",
+            "TL7.8", "TL7.9", "TL7.10", "TL7.11", "TL7.12", "TL7.13",
+            "TL7.14", "TL7.15", "TL7.16"
+        ]
     },
     {
-        "id": "loker",
-        "aspek": "Loker",
-        "kategori": "B. Fasilitas Kebersihan",
-        "nama": "Loker Penyimpanan & Ruang Ganti Pakaian",
-        "icon": "🚪",
-        "deskripsi": "Ketersediaan loker penyimpanan barang pekerja dan ruang ganti pakaian yang aman dan tertib",
-        "topik": "Fasilitas Kebersihan",
-        "default_checked": True,
-        "soal_ids": ["B5", "B6"]
-    },
-    {
-        "id": "tempat_sampah",
-        "aspek": "Tempat Sampah",
-        "kategori": "B. Fasilitas Kebersihan",
-        "nama": "Tempat Sampah & Pemilahan Limbah",
+        "id": "sampah_pakaian",
+        "kode_kategori": "FK8, SP9",
+        "aspek": "Pakaian Kerja, Loker & Tempat Sampah",
+        "kategori": "Fasilitas Kebersihan – Pakaian Kerja, Loker & Tempat Sampah",
+        "nama": "Pakaian Kerja, Ruang Ganti & Tempat Sampah",
         "icon": "🗑️",
-        "deskripsi": "Wadah penampungan sampah sementara serta pemilahan sampah organik, anorganik, dan limbah B3",
+        "deskripsi": "Penyediaan pakaian kerja, ruang ganti terpisah, loker pekerja, pemilahan tempat sampah & pembalut",
         "topik": "Fasilitas Kebersihan",
         "default_checked": True,
-        "soal_ids": ["B7", "B8"]
+        "soal_ids": ["FK8.1", "FK8.2", "SP9.1", "SP9.2", "SP9.3", "SP9.4", "SP9.5", "SP9.6"]
     },
     {
-        "id": "peralatan_kebersihan",
-        "aspek": "Peralatan Kebersihan",
-        "kategori": "B. Fasilitas Kebersihan",
-        "nama": "Peralatan & Perlengkapan Kebersihan",
-        "icon": "🧽",
-        "deskripsi": "Kondisi fisik, kelayakan fungsi, dan tempat penyimpanan peralatan kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "default_checked": True,
-        "soal_ids": ["B9"]
-    },
-    {
-        "id": "kudr",
-        "aspek": "KUDR",
-        "kategori": "C. Kebutuhan Udara",
-        "nama": "KUDR (Suhu & Kelembapan Udara Kerja)",
-        "icon": "🌡️",
-        "deskripsi": "Suhu udara ruang kerja dalam rentang 23–26°C dan kelembapan relatif 40–60%",
-        "topik": "Kebutuhan Udara",
-        "default_checked": True,
-        "soal_ids": ["C1", "C2"]
-    },
-    {
-        "id": "ventilasi",
-        "aspek": "Ventilasi",
-        "kategori": "C. Kebutuhan Udara",
-        "nama": "Sistem Ventilasi Udara",
+        "id": "kebutuhan_udara",
+        "kode_kategori": "KU10",
+        "aspek": "Kebutuhan Udara",
+        "kategori": "Kebutuhan Udara",
+        "nama": "Kebutuhan Kualitas & Ventilasi Udara Kerja",
         "icon": "💨",
-        "deskripsi": "Kelancaran sirkulasi dan fungsi pertukaran udara ruangan (alami maupun mekanis)",
+        "deskripsi": "Suhu ruang (23-26°C), kelembaban (40-60%), kadar O2 (19.5-23.5%), ventilasi rutin, cubic space (10 m³)",
         "topik": "Kebutuhan Udara",
         "default_checked": True,
-        "soal_ids": ["C3"]
-    },
-    {
-        "id": "ruang_udara",
-        "aspek": "Ruang Udara",
-        "kategori": "C. Kebutuhan Udara",
-        "nama": "Ruang Udara (Cubic Space ≥ 10 m³)",
-        "icon": "📦",
-        "deskripsi": "Kecukupan volume ruang udara paling sedikit 10 m³ untuk setiap pekerja",
-        "topik": "Kebutuhan Udara",
-        "default_checked": True,
-        "soal_ids": ["C4"]
+        "soal_ids": ["KU10.1", "KU10.2", "KU10.3", "KU10.4", "KU10.5", "KU10.6"]
     },
     {
         "id": "housekeeping",
+        "kode_kategori": "KR11",
         "aspek": "Tata Laksana Kerumahtanggaan",
-        "kategori": "D. Tata Laksana Kerumahtanggaan (Housekeeping)",
-        "nama": "Tata Laksana Kerumahtanggaan (5R / Housekeeping)",
+        "kategori": "Tata Laksana Kerumahtanggaan",
+        "nama": "Tata Laksana Kerumahtanggaan (Housekeeping / 5R)",
         "icon": "🧹",
-        "deskripsi": "Pemisahan, penataan, pembersihan berkala alat/bahan kerja, serta SOP yang dikembangkan teratur",
+        "deskripsi": "Pemisahan, penataan bahan/alat, jadwal pembersihan teratur, SOP kebersihan, dan pelabelan",
         "topik": "Tata Laksana Kerumahtanggaan",
         "default_checked": True,
-        "soal_ids": ["D1", "D2", "D3", "D4"]
+        "soal_ids": ["KR11.1", "KR11.2", "KR11.3", "KR11.4", "KR11.5"]
     }
 ]
 
 
+def normalize_fasilitas_ids(fasilitas_ids: list) -> list:
+    """Menjaga kompatibilitas ID fasilitas lama maupun baru."""
+    if not fasilitas_ids:
+        return [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]]
+    alias_map = {
+        "gedung": "struktur_gedung",
+        "toilet": "toilet_sanitasi",
+        "loker": "sampah_pakaian",
+        "tempat_sampah": "sampah_pakaian",
+        "peralatan_kebersihan": "sampah_pakaian",
+        "kudr": "kebutuhan_udara",
+        "ventilasi": "kebutuhan_udara",
+        "ruang_udara": "kebutuhan_udara"
+    }
+    valid_ids = {f["id"] for f in KELOMPOK_FASILITAS}
+    normalized = []
+    for fid in fasilitas_ids:
+        mapped = alias_map.get(fid, fid)
+        if mapped in valid_ids and mapped not in normalized:
+            normalized.append(mapped)
+    return normalized if normalized else [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]]
+
+
 # ==============================================================================
-# MASTER DAFTAR PERTANYAAN (MATRIKS PENILAIAN IHSAN)
-# Kolom A = Kategori, Kolom B = Kode, Kolom C = Aspek, Kolom D = Pertanyaan
-# Definisi Operasional & Bukti Objektif dijadikan isi Pop-up Konteks
+# MASTER DAFTAR PERTANYAAN — SHEET 'MATRIKS PENILAIAN (2)'
+# Kolom A: kode_kategori
+# Kolom B: kategori
+# Kolom C: id / kode_dimensi
+# Kolom D: teks (Aspek Penilaian / pertanyaan)
+# Kolom E: panduan (Digunakan untuk infografis pop up ketika dihover)
 # ==============================================================================
-MASTER_PERTANYAAN = {
-    # --------------------------------------------------------------------------
-    # KATEGORI A: BANGUNAN TEMPAT KERJA (Total Bobot 25%)
-    # --------------------------------------------------------------------------
-    # Aspek: Halaman (Bobot: 10%, Skor Maks: 10)
-    "A2": {
-        "id": "A2",
-        "kode": "A2",
-        "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Halaman",
-        "kelompok": "halaman",
-        "teks": "Apakah halaman tertata rapi dan bersih?",
-        "definisi": "Halaman yang tertata rapi dan bersih merupakan halaman yang bebas dari sampah atau kotoran yang mengganggu serta memiliki barang dan material yang ditempatkan secara teratur, tidak berserakan.",
-        "bukti": "Observasi langsung terhadap kebersihan halaman, penataan barang/material, kondisi jalur akses, dan drainase.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A3": {
-        "id": "A3",
-        "kode": "A3",
-        "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Halaman",
-        "kelompok": "halaman",
-        "teks": "Apakah halaman rata?",
-        "definisi": "Halaman yang rata dan bebas lubang, benjolan, serta hambatan merupakan halaman dengan permukaan yang relatif rata.",
-        "bukti": "Kondisi permukaan halaman, keberadaan lubang atau tonjolan, permukaan amblas, serta dampaknya terhadap mobilitas pekerja dan kendaraan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A4": {
-        "id": "A4",
-        "kode": "A4",
-        "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Halaman",
-        "kelompok": "halaman",
-        "teks": "Apakah halaman tidak becek dan terbebas dari genangan air?",
-        "definisi": "Halaman yang tidak becek dan bebas genangan merupakan halaman dengan permukaan yang tidak berlumpur atau basah hingga mengganggu aktivitas, serta tidak terdapat air yang terkumpul dan menetap di permukaan secara lama.",
-        "bukti": "Keberadaan genangan air atau lumpur di permukaan secara lama.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A5": {
-        "id": "A5",
-        "kode": "A5",
-        "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Halaman",
-        "kelompok": "halaman",
-        "teks": "Apakah terdapat saluran air pembuangan pada halaman?",
-        "definisi": "Saluran air pembuangan pada halaman merupakan saluran yang berfungsi menampung dan mengalirkan air buangan dari area halaman menuju tempat pembuangan. Butir ini digunakan untuk mengidentifikasi keberadaan saluran; apabila tidak tersedia, butir terkait kondisi saluran tidak berlaku.",
-        "bukti": "Pemeriksaan fisik ketersediaan saluran drainase/pembuangan air di area halaman.",
-        "tipe": "screening_saluran",
-        "opsi": ["Ya, terdapat saluran pembuangan air", "Tidak ada saluran pembuangan air"],
-        "bobot_max": 0
-    },
-    "A6": {
-        "id": "A6",
-        "kode": "A6",
-        "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Halaman",
-        "kelompok": "halaman",
-        "teks": "Apakah saluran tersebut tertutup dan terbuat dari bahan yang cukup kuat?",
-        "definisi": "Saluran air pembuangan yang tertutup dan cukup kuat merupakan saluran yang bagian atasnya terlindungi penutup serta memiliki badan dan penutup yang kokoh untuk penggunaan normal.",
-        "bukti": "Keberadaan dan kondisi penutup saluran, kestabilan pemasangan, kondisi fisik material, serta kesesuaian kekuatan penutup terhadap beban di area tersebut.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2,
-        "depends_on": "A5"
-    },
-    "A7": {
-        "id": "A7",
-        "kode": "A7",
-        "aspek": "Halaman",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Halaman",
-        "kelompok": "halaman",
-        "teks": "Apakah saluran tersebut mengalir dan tidak tergenang?",
-        "definisi": "Saluran air pembuangan yang mengalir dan tidak tergenang merupakan saluran yang memungkinkan air buangan bergerak menuju tempat pembuangan tanpa sumbatan nyata atau genangan yang menetap.",
-        "bukti": "Kelancaran aliran air, keberadaan genangan, sumbatan, endapan lumpur.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2,
-        "depends_on": "A5"
-    },
+def _clean_panduan(raw_text: str) -> tuple[str, str]:
+    """Memisahkan teks panduan utama dan rujukan regulasi (Dasar: ...) dari Kolom E."""
+    lines = [line.strip() for line in raw_text.strip().splitlines() if line.strip()]
+    cleaned_lines = []
+    regulasi = "Permenaker No. 5 Tahun 2018 tentang K3 Lingkungan Kerja"
+    for line in lines:
+        if line.lower().startswith("lihat rincian butir pada sheet"):
+            continue
+        m = re.search(r"\(Dasar:\s*(.+?)\)", line, flags=re.IGNORECASE)
+        if m:
+            regulasi = m.group(1).strip()
+            line_wo_dasar = re.sub(r"\(Dasar:\s*.+?\)", "", line, flags=re.IGNORECASE).strip()
+            if line_wo_dasar:
+                cleaned_lines.append(line_wo_dasar)
+        else:
+            cleaned_lines.append(line)
+    panduan_bersih = " ".join(cleaned_lines).strip()
+    return panduan_bersih, regulasi
 
-    # Aspek: Gedung (Bobot: 10%, Skor Maks: 10)
-    "A8": {
-        "id": "A8",
-        "kode": "A8",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah kondisi gedung terpelihara dan bersih?",
-        "definisi": "Gedung yang terpelihara dan bersih merupakan bangunan Tempat Kerja yang kebersihan ruang dan bagian bangunannya dijaga serta tidak menunjukkan kerusakan atau kondisi terbengkalai yang nyata.",
-        "bukti": "Kebersihan lantai, dinding, dan langit-langit; kondisi fisik bangunan; kebocoran atau rembesan; serta tanda pertumbuhan jamur dan keberadaan hama.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A9": {
-        "id": "A9",
-        "kode": "A9",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah kondisi gedung memiliki struktur yang kuat dan kokoh?",
-        "definisi": "Struktur gedung yang kuat dan kokoh merupakan bagian struktur bangunan yang mampu menopang bangunan sebagaimana fungsinya dan tidak menunjukkan tanda kerusakan yang mengindikasikan gangguan kekokohan, seperti retak signifikan atau deformasi. Kepastian kekuatan struktur perlu didukung pemeriksaan teknis bila diperlukan.",
-        "bukti": "Kondisi visual kolom, balok, dinding, lantai, fondasi yang terlihat, serta rangka dan atap bangunan. Dokumen layak fungsi atau dokumen bukti lainnya.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A10": {
-        "id": "A10",
-        "kode": "A10",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah luas ruang gerak di dalam gedung minimal 2 (dua) meter persegi untuk setiap orang?",
-        "definisi": "Luas ruang gerak merupakan area yang tersedia bagi pekerja untuk bergerak dan melakukan pekerjaan di dalam gedung. Luas ruang gerak paling sedikit 2 m² untuk setiap orang, dihitung berdasarkan jumlah pekerja yang berada atau bekerja secara bersamaan pada ruang tersebut.",
-        "bukti": "Luas lantai ruangan dan perbandingan jumlah pekerja yang beraktivitas di dalamnya.",
+
+_RAW_MATRIKS_2 = [
+    # --- HL1: Bangunan Tempat Kerja – Halaman ---
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.1", "Apakah di tempat kerja ada halaman?",
+     "Termasuk halaman adalah area untuk lahan parkir, taman, lapangan, jalan akses.",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.2", "Apakah halaman bersih?",
+     "Halaman bersih yaitu halaman yang tidak terdapat sampah, kotoran, atau barang/material berserakan.",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.3", "Apakah halaman tertata rapi?",
+     "Halaman tertata rapi yaitu barang, material, kendaraan, dan peralatan di halaman diletakkan pada tempat/area yang telah ditentukan, tidak menghalangi jalur orang maupun kendaraan, serta taman/tanaman (jika ada) terpelihara.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (1) huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.4", "Apakah halaman rata?",
+     "Halaman rata yaitu permukaan halaman (area parkir, lapangan, jalan akses) tidak bergelombang, tidak berlubang, tidak retak atau amblas, dan tidak terdapat perbedaan ketinggian yang dapat membuat orang tersandung atau kendaraan terguncang.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (1) huruf a)",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.5", "Apakah halaman tidak becek?",
+     "Halaman tidak becek yaitu permukaan halaman tidak berlumpur dan tidak terdapat genangan air atau tanah basah yang menetap, termasuk setelah hujan reda.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (1) huruf a)",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.6", "Apakah cukup luas untuk akses lalu lintas orang dan barang?",
+     "Halaman cukup luas untuk lalu lintas orang dan barang yaitu jalur pejalan kaki dan jalur kendaraan/pengangkut barang memiliki lebar yang memadai sehingga orang dan barang dapat bergerak tanpa saling mengganggu, bersinggungan, atau terhambat.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (1) huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.7", "Apakah terdapat saluran air pembuangan?",
+     "Saluran air pembuangan yaitu parit/drainase/selokan di halaman yang berfungsi mengalirkan air hujan dan air buangan ke luar area kerja. Bila halaman tidak memiliki saluran sama sekali, beri N/A pada dimensi HL1.8 dan HL1.9 dan jelaskan di kolom komentar.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (2))",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.8", "Apakah saluran air tertutup dengan bahan yang kuat?",
+     "Saluran air tertutup dengan bahan yang kuat yaitu seluruh ruas saluran air di halaman ditutup (plat beton, grill/besi, atau penutup sejenis) dengan bahan yang mampu menahan beban orang dan kendaraan yang melintas. Beri N/A bila tidak ada saluran.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "halaman", "Kondisi Fisik"),
+    ("HL1", "Bangunan Tempat Kerja – Halaman", "HL1.9", "Apakah saluran air tidak tergenang?",
+     "Saluran air tidak tergenang yaitu air buangan mengalir lancar menuju pembuangan akhir dan tidak ada air yang tertahan di dalam saluran maupun meluap ke halaman. Beri N/A bila tidak ada saluran.\n(Dasar: Permenaker 5/2018 Pasal 27 ayat (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "halaman", "Kondisi Fisik"),
+
+    # --- GD2: Bangunan Tempat Kerja – Gedung ---
+    ("GD2", "Bangunan Tempat Kerja – Gedung", "GD2.1", "Apakah Gedung terpelihara dan bersih?",
+     "Gedung terpelihara dan bersih yaitu bangunan dirawat secara berkala dengan tersedianya jadwal pemeliharaan sehingga tidak ada kerusakan yang dibiarkan, serta bagian dalam dan luar gedung bebas dari sampah, debu, kotoran, dan hama.\n(Dasar: Permenaker 5/2018 Pasal 28 ayat (2) huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("GD2", "Bangunan Tempat Kerja – Gedung", "GD2.2", "Apakah struktur Gedung kuat dan kokoh?",
+     "Struktur gedung kuat dan kokoh yaitu elemen struktur (fondasi, kolom, balok, pelat lantai, dan rangka atap) tidak menunjukkan retak struktural, deformasi, atau ketidakstabilan yang membahayakan pekerja. Bahan bangunan bisa berupa beton, kayu, besi atau bahan lain yang lazim digunakan untuk struktur bangunan.\n(Dasar: Permenaker 5/2018 Pasal 28 ayat (2) huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("GD2", "Bangunan Tempat Kerja – Gedung", "GD2.3", "Apakah Gedung cukup luas sehingga memberikan ruang Gerak paling sedikit 2 m2 per orang?",
+     "Gedung cukup luas (area kerja) yaitu ruang gerak setiap pekerja paling sedikit 2 m². Cara menilai: luas lantai kerja yang dapat digunakan untuk bergerak (m²) dibagi jumlah pekerja terbanyak di ruang/gedung tersebut pada satu waktu kerja; hasil ≥ 2 m² per orang berarti memenuhi. Perlu dihitung luas lantai dibagi jumlah orang atau pekerja.\n(Dasar: Permenaker 5/2018 Pasal 28 ayat (2) huruf c)",
+     "struktur_gedung", "Kondisi Fisik"),
+
+    # --- DL3: Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit ---
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.1", "Apakah dinding kering/tidak lembab/tidak korosi/keropos/berayap?",
+     "Dinding kering/tidak lembab/tidak korosi yaitu permukaan dinding tidak basah, tidak merembes, tidak berjamur atau berlumut, dan bagian logamnya tidak berkarat.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.2", "Apakah langit-langit kering atau tidak lembab?",
+     "Langit-langit kering atau tidak lembab yaitu plafon/langit-langit tidak basah, tidak merembes, dan tidak berjamur.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.3", "Apakah dinding dicat, dan atau mudah dibersihkan?",
+     "Dinding dicat, dan atau mudah dibersihkan yaitu dinding dilapisi cat (atau lapisan lain seperti keramik) pada permukaan yang halus dan tidak berpori sehingga mudah dilap atau dicuci, serta dalam keadaan bersih.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.4", "Apakah langit-langit dicat dan atau mudah dibersihkan?",
+     "Langit-langit dicat dan atau mudah dibersihkan yaitu langit-langit dilapisi cat (atau lapisan lain) pada permukaan yang halus dan tidak berpori sehingga mudah dibersihkan, serta dalam keadaan bersih.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.5", "Apakah dinding dilakukan pengecatan ulang?",
+     "Dinding dilakukan pengecatan ulang yaitu dinding dicat ulang paling sedikit 5 (lima) tahun sekali. Bukti: catatan/dokumen pemeliharaan atau keterangan penanggung jawab gedung tentang tahun pengecatan terakhir, serta kondisi cat saat survei.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf c)",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.6", "Apakah langit-langit dilakukan pengecatan ulang?",
+     "Langit-langit dilakukan pengecatan ulang yaitu langit-langit dicat ulang paling sedikit 5 (lima) tahun sekali. Bukti: catatan/dokumen pemeliharaan atau keterangan penanggung jawab gedung tentang tahun pengecatan terakhir, serta kondisi cat saat survei.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf c)",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.7", "Apakah dinding dibersihkan secara rutin dan terjadwal?",
+     "Dinding dibersihkan secara rutin yaitu dinding dibersihkan paling sedikit 1 (satu) kali setahun.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf d)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("DL3", "Bangunan Tempat Kerja – Gedung: Dinding dan Langit-langit", "DL3.8", "Apakah langit-langit dibersihkan secara rutin dan terjadwal?",
+     "Langit-langit dibersihkan secara rutin yaitu langit-langit dibersihkan paling sedikit 1 (satu) kali setahun.\n(Dasar: Permenaker 5/2018 Pasal 29 huruf d)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+
+    # --- LT4: Bangunan Tempat Kerja – Gedung: Lantai ---
+    ("LT4", "Bangunan Tempat Kerja – Gedung: Lantai", "LT4.1", "Apakah lantai terbuat dari bahan yang keras?",
+     "Lantai terbuat dari bahan yang keras yaitu lantai berbahan padat dan kuat seperti beton, keramik, granit, epoksi, vinil atau paving, bukan tanah, pasir, atau papan lapuk, serta tidak retak, pecah, atau aus hingga lapisan dasar terlihat.\n(Dasar: Permenaker 5/2018 Pasal 30 huruf a)",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("LT4", "Bangunan Tempat Kerja – Gedung: Lantai", "LT4.2", "Apakah lantai terbuat dari bahan yang tahan air?",
+     "Lantai terbuat dari bahan yang tahan air yaitu bahan lantai tidak menyerap air dan tidak rusak (menggelembung, melapuk, mengelupas) bila terkena air atau dibersihkan dengan air.\n(Dasar: Permenaker 5/2018 Pasal 30 huruf a)",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("LT4", "Bangunan Tempat Kerja – Gedung: Lantai", "LT4.3", "Apakah lantai terbuat dari bahan yang tahan dari bahan kimia yang merusak?",
+     "Lantai tahan dari bahan kimia yang merusak yaitu lantai area kerja tidak rusak, berlubang, korosi, atau mengelupas apabila terkena tumpahan atau paparan bahan kimia.\n(Dasar: Permenaker 5/2018 Pasal 30 huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("LT4", "Bangunan Tempat Kerja – Gedung: Lantai", "LT4.4", "Apakah lantai datar dan mudah dibersihkan?",
+     "Lantai datar dan mudah dibersihkan yaitu permukaan lantai rata (tidak bergelombang atau berlubang) dan halus sehingga mudah disapu atau dipel.\n(Dasar: Permenaker 5/2018 Pasal 30 huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("LT4", "Bangunan Tempat Kerja – Gedung: Lantai", "LT4.5", "Apakah lantai tidak licin?",
+     "Lantai tidak licin yaitu permukaan lantai tidak menyebabkan orang tergelincir, baik karena bahan/teksturnya maupun karena air, minyak, atau tumpahan di atasnya.\n(Dasar: Permenaker 5/2018 Pasal 30 huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("LT4", "Bangunan Tempat Kerja – Gedung: Lantai", "LT4.6", "Apakah lantai dibersihkan secara teratur?",
+     "Lantai dibersihkan secara teratur yaitu lantai dibersihkan sesuai jadwal yang ditetapkan (disapu/dipel/divakum) dan tumpahan atau kotoran segera dibersihkan, termasuk karpet yang digunakan untuk melapisi lantai apabila ada.\n(Dasar: Permenaker 5/2018 Pasal 30 huruf c)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+
+    # --- AT5: Bangunan Tempat Kerja – Gedung: Atap ---
+    ("AT5", "Bangunan Tempat Kerja – Gedung: Atap", "AT5.1", "Apakah keseluruhan atap mampu memberi perlindungan dari panas matahari dan hujan?",
+     "Atap berupa beton, genteng, logam, PVC atau material lain yang dapat memberikan perlindungan dari panas matahari dan hujan pada seluruh area kerja dan jalur yang digunakan pekerja.\n(Dasar: Permenaker 5/2018 Pasal 31 huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("AT5", "Bangunan Tempat Kerja – Gedung: Atap", "AT5.2", "Apakah terdapat atap yang bocor?",
+     "Atap bocor yaitu atap yang meneteskan atau merembeskan air dan terdapat lubang, retak, atau bagian yang patah/bergeser. (Catatan: Pilih 'Tidak' jika atap tidak bocor/memenuhi syarat).\n(Dasar: Permenaker 5/2018 Pasal 31 huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+    ("AT5", "Bangunan Tempat Kerja – Gedung: Atap", "AT5.3", "Apakah terdapat atap yang berjamur?",
+     "Atap berjamur yaitu bagian atap/langit-langit yang ditumbuhi jamur atau lumut. (Catatan: Pilih 'Tidak' jika atap bebas jamur/memenuhi syarat).\n(Dasar: Permenaker 5/2018 Pasal 31 huruf b)",
+     "struktur_gedung", "Kondisi Fisik"),
+
+    # --- GD2.4: Khusus Disabilitas pada Gedung ---
+    ("GD2", "Bangunan Tempat Kerja – Gedung", "GD2.4", "Apakah tersedia jalur landai (ramp) pada area yang memiliki perbedaan ketinggian untuk memudahkan akses pengguna kursi roda?",
+     "Jalur landai (ramp) tersedia yaitu pada setiap perbedaan ketinggian lantai/permukaan yang dilalui pekerja dan tamu (tangga masuk gedung, teras, selasar, undakan antarruang, jalur dari area parkir ke gedung) terdapat jalur miring yang dapat dilalui pengguna kursi roda secara mandiri, aman, dan nyaman, atau tersedia alternatif setara (mis. lift). Isi N/A bila tidak ada perbedaan ketinggian pada jalur pekerja.\n(Dasar: Permen PUPR No. 14/PRT/M/2017 tentang Persyaratan Kemudahan Bangunan Gedung; Permenaker 5/2018 Pasal 35 ayat (2) huruf d dan e tentang akses mudah dilalui bagi pengguna kursi roda)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "struktur_gedung", "Kondisi Fisik"),
+
+    # --- BT6: Bangunan Tempat Kerja – Bangunan Bawah Tanah ---
+    ("BT6", "Bangunan Tempat Kerja – Bangunan Bawah Tanah", "BT6.1", "Apakah bangunan bawah tanah memiliki struktur yang kuat?",
+     "Bangunan bawah tanah memiliki struktur yang kuat yaitu dapat dilihat dari kondisi dinding, lantai, kolom, dan langit-langit bangunan bawah tanah tidak retak struktural, tidak merembes, tidak berdeformasi, serta tidak ada bagian yang runtuh atau beton terkelupas dengan tulangan terbuka.\n(Dasar: Permenaker 5/2018 Pasal 32 ayat (1) huruf a)",
+     "bawah_tanah", "Kondisi Fisik"),
+    ("BT6", "Bangunan Tempat Kerja – Bangunan Bawah Tanah", "BT6.2", "Apakah bangunan bawah tanah memiliki sistem ventilasi udara?",
+     "Bangunan bawah tanah memiliki sistem ventilasi udara yaitu tersedia ventilasi alami atau mekanis yang menjamin pergantian udara sehingga udara tidak pengap dan kadar oksigen yang cukup untuk beraktivitas.\n(Dasar: Permenaker 5/2018 Pasal 32 ayat (1) huruf b)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "bawah_tanah", "Kondisi Fisik"),
+    ("BT6", "Bangunan Tempat Kerja – Bangunan Bawah Tanah", "BT6.3", "Apakah bangunan bawah tanah memiliki sumber pencahayaan yang memadai?",
+     "Bangunan bawah tanah memiliki sumber pencahayaan yaitu terdapat lampu (atau cahaya alami) yang berfungsi dan menerangi seluruh area, termasuk tangga, lorong, dan jalur keluar. Tingkat pencahayaan dibawah tanah memadai untuk aktivitas pekerja.\n(Dasar: Permenaker 5/2018 Pasal 32 ayat (1) huruf c)",
+     "bawah_tanah", "Kondisi Fisik"),
+    ("BT6", "Bangunan Tempat Kerja – Bangunan Bawah Tanah", "BT6.4", "Apakah saluran pembuangan air mengalir dengan baik?",
+     "Saluran pembuangan air mengalir dengan baik yaitu saluran/penampung pembuangan air di bangunan bawah tanah berfungsi, air mengalir lancar, tidak tersumbat, dan tidak ada genangan.\n(Dasar: Permenaker 5/2018 Pasal 32 ayat (1) huruf d)",
+     "bawah_tanah", "Kondisi Fisik"),
+    ("BT6", "Bangunan Tempat Kerja – Bangunan Bawah Tanah", "BT6.5", "Apakah bangunan bawah tanah bersih dan terawat?",
+     "Bangunan bawah tanah bersih dan terawat yaitu bebas sampah, kotoran, genangan, dan barang berserakan, serta lantai, dinding, dan peralatannya dalam kondisi baik, dipelihara berkala dan terjadwal.\n(Dasar: Permenaker 5/2018 Pasal 32 ayat (1) huruf e)",
+     "bawah_tanah", "Kondisi Fisik"),
+    ("BT6", "Bangunan Tempat Kerja – Bangunan Bawah Tanah", "BT6.6", "Apakah bangunan bawah tanah mengikuti syarat Ruang Terbatas?",
+     "Bangunan bawah tanah mengikuti syarat Ruang Terbatas yaitu bila bangunan bawah tanah termasuk ruang terbatas (ruang yang cukup besar untuk dimasuki pekerja, memiliki akses masuk/keluar terbatas, dan tidak dirancang untuk ditempati terus-menerus), penerapan higiene dan sanitasinya mengikuti ketentuan peraturan perundang-undangan tentang ruang terbatas.\n(Dasar: Permenaker 5/2018 Pasal 32 ayat (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "bawah_tanah", "Kondisi Fisik"),
+
+    # --- TL7: Fasilitas Kebersihan – Toilet ---
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.1", "Apakah toilet bersih dan tidak menimbulkan bau?",
+     "Toilet bersih dan tidak menimbulkan bau yaitu seluruh bagian toilet bebas kotoran, noda, dan sampah, serta tidak tercium bau tidak sedap.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.2", "Apakah toilet tidak terdapat lalat, nyamuk, atau serangga lainnya?",
+     "Toilet tidak terdapat lalat, nyamuk, atau serangga lainnya yaitu tidak ditemukan serangga (lalat, nyamuk, kecoa, dan sejenisnya) maupun jentik di dalam toilet dan pada tempat penampungan airnya (bak/ember) saat survei.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf b)",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.3", "Apakah toilet tersedia saluran pembuangan air yang mengalir dengan baik?",
+     "Toilet tersedia saluran pembuangan air yang mengalir dengan baik yaitu lantai miring ke arah saluran, saluran pembuangan berfungsi, air buangan mengalir lancar, tidak tersumbat, dan tidak ada genangan di lantai.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf c)",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.4", "Apakah toilet tersedia air bersih?",
+     "Toilet tersedia air bersih yaitu air tersedia pada keran, bak, atau penampung selama jam kerja, tampak jernih, tidak berbau, dan tidak berwarna.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf d)",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.5", "Apakah toilet dilengkapi dengan pintu?",
+     "Toilet dilengkapi dengan pintu yaitu setiap bilik/ruang toilet memiliki pintu yang berfungsi dan menjaga privasi pengguna.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf e dan Pasal 35 ayat (1))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.6", "Apakah toilet memiliki penerangan yang cukup?",
+     "Toilet memiliki penerangan yang cukup yaitu ruang toilet cukup terang untuk digunakan dan dibersihkan dengan aman, baik dari lampu maupun cahaya alami.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf f)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.7", "Apakah toilet memiliki sirkulasi udara yang baik?",
+     "Toilet memiliki sirkulasi udara yang baik yaitu terdapat ventilasi alami atau buatan yang berfungsi sehingga udara tidak pengap dan tidak lembab.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf g)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.8", "Apakah toilet dibersihkan setiap hari secara periodik?",
+     "Toilet dibersihkan setiap hari secara periodik yaitu toilet dibersihkan paling sedikit sekali setiap hari kerja sesuai jadwal yang ditetapkan.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf h)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.9", "Apakah toilet dapat digunakan selama jam kerja?",
+     "Toilet dapat digunakan selama jam kerja yaitu toilet tidak terkunci, rusak, atau tidak dapat dipakai karena sedang dibersihkan pada seluruh jam kerja, termasuk setiap shift, dan pekerja dapat menggunakannya bila diperlukan.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (1) huruf i)",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.10", "Apakah toilet terpisah antara laki-laki dan perempuan, serta penyandang cacat?",
+     "Toilet terpisah antara laki-laki, perempuan, dan penyandang cacat yaitu tersedia toilet tersendiri (ruang/bilik berbeda) untuk pekerja laki-laki, pekerja perempuan, dan pekerja penyandang disabilitas, dengan toilet disabilitas yang memenuhi persyaratan ukuran dan aksesibilitas.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (3) dan Pasal 35 ayat (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.11", "Apakah toilet diberikan tanda yang jelas?",
+     "Toilet diberikan tanda yang jelas yaitu setiap toilet laki-laki, perempuan, dan disabilitas diberi rambu (simbol dan/atau tulisan) yang mudah terlihat dan terbaca.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (3))",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.12", "Apakah jumlah jamban telah sesuai dengan jumlah pekerja dalam 1 waktu kerja?",
+     "Jumlah jamban sesuai dengan jumlah pekerja dalam satu waktu kerja yaitu jumlah jamban memenuhi ketentuan: 1–15 orang = 1 jamban; 16–30 orang = 2; 31–45 orang = 3; 46–60 orang = 4; 61–80 orang = 5; 81–100 orang = 6; setiap penambahan 40 orang ditambah 1 jamban.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (5) sampai (8))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.13", "Apakah Kelengkapan fasilitas toilet memadai?",
+     "Kelengkapan fasilitas toilet meliputi paling sedikit jamban, air bersih yang cukup, alat pembilas, tempat sampah, tempat cuci tangan, dan sabun.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.14", "Apakah ruang toilet memungkinkan pengguna kursi roda melakukan manuver atau berputar 180 derajat?",
+     "Ruang toilet memungkinkan pengguna kursi roda berputar 180° yaitu di dalam ruang toilet disabilitas tersedia ruang bebas yang cukup sehingga pengguna kursi roda dapat masuk, berputar 180 derajat, dan keluar tanpa bantuan serta tanpa terhalang jamban, tempat sampah, ember, atau benda lain. Ruang toilet disabilitas paling sedikit berukuran panjang 152,5 cm, lebar 227,5 cm, dan tinggi 240 cm. Bila toilet disabilitas tidak tersedia, beri skor 0.\n(Dasar: Permenaker 5/2018 Pasal 35 ayat (2) huruf a, b, c, d, dan e)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.15", "Apakah toilet dilengkapi pegangan rambat (handrail) untuk membantu penyandang disabilitas berpindah dari kursi roda ke jamban dan sebaliknya?",
+     "Pegangan rambat (handrail) yaitu batang pegangan yang terpasang tetap pada dinding di samping dan/atau belakang jamban pada toilet disabilitas sehingga pengguna kursi roda dapat berpindah dari kursi roda ke jamban dan sebaliknya secara mandiri dan aman. Bila toilet disabilitas tidak tersedia, beri skor 0.\n(Dasar: Permenaker 5/2018 Pasal 35 ayat (2) huruf i)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+    ("TL7", "Fasilitas Kebersihan – Toilet", "TL7.16", "Apakah tempat cuci tangan dapat dijangkau dan digunakan oleh pekerja pengguna kursi roda?",
+     "Tempat cuci tangan dapat dijangkau dan digunakan pengguna kursi roda yaitu wastafel/keran di toilet disabilitas berada pada ketinggian dan posisi yang terjangkau, tersedia ruang kosong di bawahnya untuk lutut dan ruang bebas di depannya, sehingga pengguna kursi roda dapat mendekat, mengoperasikan keran, dan mencuci tangan tanpa bantuan. Bila toilet disabilitas tidak tersedia, beri skor 0.\n(Dasar: Permenaker 5/2018 Pasal 34 ayat (2) huruf e dan f serta Pasal 35 ayat (2) huruf e; standar teknis: Permen PUPR No. 14/PRT/M/2017)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "toilet_sanitasi", "Fasilitas Kebersihan"),
+
+    # --- FK8: Fasilitas Kebersihan – Pakaian Kerja dan Loker ---
+    ("FK8", "Fasilitas Kebersihan – Pakaian Kerja dan Loker", "FK8.1", "Apakah Perusahaan menyediakan pakaian kerja?",
+     "Perusahaan menyediakan pakaian kerja yaitu bagi pekerja yang diwajibkan memakai pakaian kerja sesuai syarat K3, pakaian kerja disediakan oleh pengurus/perusahaan. Isi N/A bila perusahaan tidak mewajibkan pakaian kerja.\n(Dasar: Permenaker 5/2018 Pasal 36 ayat (1) dan (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+    ("FK8", "Fasilitas Kebersihan – Pakaian Kerja dan Loker", "FK8.2", "Apakah Perusahaan menyediakan tempat penyimpanan atau loker untuk setiap pekerja yang terjamin keamanannya?",
+     "Perusahaan menyediakan tempat penyimpanan/loker yaitu setiap pekerja memiliki loker yang terjamin keamanannya, dan bila pekerja berganti pakaian di tempat kerja tersedia ruang ganti yang bersih, terpisah antara laki-laki dan perempuan.\n(Dasar: Permenaker 5/2018 Pasal 36 ayat (3) dan (4))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+
+    # --- SP9: Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut ---
+    ("SP9", "Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut", "SP9.1", "Apakah Perusahaan menyediakan tempat sampah terpisah?",
+     "Perusahaan menyediakan tempat sampah terpisah yaitu tempat sampah dipisahkan menurut jenis sampah (organik, non organik, dan bahan berbahaya) dan tersedia pada setiap tempat kerja.\n(Dasar: Permenaker 5/2018 Pasal 37 ayat (1) dan (2) huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+    ("SP9", "Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut", "SP9.2", "Apakah Perusahaan menyediakan tempat sampah terpisah yang diberikan label sesuai ketentuan?",
+     "Tempat sampah terpisah diberikan label sesuai ketentuan yaitu setiap tempat sampah diberi label yang jelas untuk jenis sampah organik, non organik, dan bahan berbahaya sesuai ketentuan peraturan perundang-undangan.\n(Dasar: Permenaker 5/2018 Pasal 37 ayat (2) huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+    ("SP9", "Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut", "SP9.3", "Apakah tempat sampah terpisah tertutup?",
+     "Tempat sampah terpisah tertutup yaitu setiap tempat sampah dilengkapi penutup yang berfungsi dan ditutup saat tidak digunakan, serta sampah tidak menyembul atau tumpah keluar.\n(Dasar: Permenaker 5/2018 Pasal 37 ayat (2) huruf b)",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+    ("SP9", "Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut", "SP9.4", "Apakah tutup tempat sampah terpisah terbuat dari bahan yang kedap air?",
+     "Tutup tempat sampah terbuat dari bahan yang kedap air yaitu penutup (dan badan) tempat sampah terbuat dari bahan yang tidak menyerap dan tidak bocor, misalnya plastik atau logam, bukan kardus atau anyaman.\n(Dasar: Permenaker 5/2018 Pasal 37 ayat (2) huruf b)",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+    ("SP9", "Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut", "SP9.5", "Apakah tempat sampah terpisah menjadi sarang lalat atau binatang serangga lain?",
+     "PERHATIAN, butir ini berkebalikan: terpenuhi (pilih 'Tidak', skor 1) bila tempat sampah terpisah TIDAK menjadi sarang lalat atau binatang serangga lain, yaitu tidak ada lalat, belatung, kecoa, atau semut yang berkerumun serta tidak berbau busuk menyengat; tidak terpenuhi (pilih 'Iya', skor 0) bila ditemukan.\n(Dasar: Permenaker 5/2018 Pasal 37 ayat (2))",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+    ("SP9", "Fasilitas Kebersihan – Tempat Sampah dan Pembuangan Pembalut", "SP9.6", "Apakah tersedia Tempat Pembuangan Pembalut di ruang toilet perempuan?",
+     "Tempat pembuangan pembalut yaitu wadah khusus di ruang toilet perempuan untuk membuang pembalut yang kedap cairan, bertutup, berlabel jelas, dan dibersihkan setiap hari.\n(Dasar: Permenaker 5/2018 Pasal 38)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "sampah_pakaian", "Fasilitas Kebersihan"),
+
+    # --- KU10: Kebutuhan Udara ---
+    ("KU10", "Kebutuhan Udara", "KU10.1", "Apakah suhu ruangan nyaman antara 23 – 26 derajat Celcius dengan perbedaan suhu antar ruangan tidak boleh melebihi 5 derajat Celcius?",
+     "Suhu ruangan nyaman yaitu suhu kering ruangan antara 23–26 °C dengan perbedaan suhu antar ruangan tidak melebihi 5 °C (ukur dengan termometer). Berlaku untuk tempat kerja pekerjaan administratif, pelayanan umum, dan fungsi manajerial; N/A untuk area lain.\n(Dasar: Permenaker 5/2018 Pasal 40 ayat (1) dan (3))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "kebutuhan_udara", "Kebutuhan Udara"),
+    ("KU10", "Kebutuhan Udara", "KU10.2", "Apakah kelembaban ruangan antara 40-60%?",
+     "Kelembaban ruangan antara 40–60% (ukur dengan higrometer). Berlaku untuk tempat kerja pekerjaan administratif, pelayanan umum, dan fungsi manajerial; N/A untuk area lain.\n(Dasar: Permenaker 5/2018 Pasal 40 ayat (3) huruf a)",
+     "kebutuhan_udara", "Kebutuhan Udara"),
+    ("KU10", "Kebutuhan Udara", "KU10.3", "Apakah kadar oksigen dalam ruang antara 19,5% - 23,5%?",
+     "Kadar oksigen dalam ruang antara 19,5% sampai 23,5% dari volume udara (ukur dengan alat ukur oksigen). Berlaku untuk tempat kerja pekerjaan administratif, pelayanan umum, dan fungsi manajerial; N/A untuk area lain.\n(Dasar: Permenaker 5/2018 Pasal 40 ayat (4))",
+     "kebutuhan_udara", "Kebutuhan Udara"),
+    ("KU10", "Kebutuhan Udara", "KU10.4", "Apakah terdapat sistem ventilasi (alami, buatan, atau kombinasi) dalam ruang?",
+     "Sistem ventilasi dalam ruang yaitu tersedia ventilasi alami (jendela/lubang angin), buatan (exhaust, blower, AC), atau kombinasi keduanya yang menjamin kebutuhan udara pekerja dan mengurangi kadar kontaminan.\n(Dasar: Permenaker 5/2018 Pasal 41 ayat (1) dan (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "kebutuhan_udara", "Kebutuhan Udara"),
+    ("KU10", "Kebutuhan Udara", "KU10.5", "Apakah sistem ventilasi dibersihkan secara berkala minimal 3 bulan sekali?",
+     "Sistem ventilasi dibersihkan berkala yaitu ventilasi buatan (filter AC, kipas, exhaust, saluran udara) dibersihkan paling sedikit 3 (tiga) bulan sekali. Isi N/A bila hanya menggunakan ventilasi alami.\n(Dasar: Permenaker 5/2018 Pasal 41 ayat (3))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "kebutuhan_udara", "Kebutuhan Udara"),
+    ("KU10", "Kebutuhan Udara", "KU10.6", "Apakah setiap orang bekerja dalam ruangan mendapat ruang udara (cubic space) paling sedikit 10 m3?",
+     "Ruang udara (cubic space) yaitu setiap orang yang bekerja dalam ruangan mendapat ruang udara paling sedikit 10 m³. Hitung: (panjang × lebar × tinggi) dibagi jumlah pekerja di ruangan, dengan tinggi ruangan di atas 4 m dihitung maksimal 4 m.\n(Dasar: Permenaker 5/2018 Pasal 42)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "kebutuhan_udara", "Kebutuhan Udara"),
+
+    # --- KR11: Tata Laksana Kerumahtanggaan ---
+    ("KR11", "Tata Laksana Kerumahtanggaan", "KR11.1", "Apakah terdapat pemisahan antara alat, perkakas, dan bahan yang diperlukan atau digunakan?",
+     "Memisahkan alat, perkakas, dan bahan yaitu alat, perkakas, dan bahan yang diperlukan atau digunakan dalam pekerjaan dipilah dan dipisahkan dari yang tidak diperlukan (rusak, tidak terpakai, atau kedaluwarsa), serta dikelompokkan terpisah menurut jenis dan fungsinya.\n(Dasar: Permenaker 5/2018 Pasal 43 ayat (2) huruf a)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "housekeeping", "Tata Laksana Kerumahtanggaan"),
+    ("KR11", "Tata Laksana Kerumahtanggaan", "KR11.2", "Apakah terdapat penataan antara alat, perkakas, dan bahan yang diperlukan atau digunakan?",
+     "Menata alat, perkakas, dan bahan yaitu alat, perkakas, dan bahan diletakkan pada posisi yang telah ditetapkan, tertata rapi dan tertib, mudah dijangkau, serta aman sehingga tidak menghalangi jalur kerja maupun menimbulkan bahaya kecelakaan.\n(Dasar: Permenaker 5/2018 Pasal 43 ayat (2) huruf b dan Pasal 44 ayat (1))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "housekeeping", "Tata Laksana Kerumahtanggaan"),
+    ("KR11", "Tata Laksana Kerumahtanggaan", "KR11.3", "Apakah terdapat aktivitas pembersihan antara alat, perkakas, dan bahan yang diperlukan atau digunakan?",
+     "Aktivitas pembersihan alat, perkakas, dan bahan yaitu alat, perkakas, dan bahan dibersihkan secara rutin sesuai jadwal yang ditetapkan sehingga bebas dari debu tebal, kotoran, oli/minyak, dan tumpahan.\n(Dasar: Permenaker 5/2018 Pasal 43 ayat (2) huruf c)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "housekeeping", "Tata Laksana Kerumahtanggaan"),
+    ("KR11", "Tata Laksana Kerumahtanggaan", "KR11.4", "Apakah terdapat prosedur kebersihan, penempatan dan penataan untuk alat, perkakas dan bahan dan secara berkala prosedur dikembangkan?",
+     "Prosedur kebersihan, penempatan, dan penataan yaitu terdapat prosedur tertulis untuk kebersihan, penempatan, dan penataan alat, perkakas, dan bahan yang ditetapkan secara resmi, dilaksanakan oleh pekerja, serta dikembangkan (ditinjau dan diperbarui) secara berkala.\n(Dasar: Permenaker 5/2018 Pasal 43 ayat (2) huruf d dan e)\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "housekeeping", "Tata Laksana Kerumahtanggaan"),
+    ("KR11", "Tata Laksana Kerumahtanggaan", "KR11.5", "Apakah terdapat pelabelan yang jelas?",
+     "Pelabelan yang jelas yaitu bahan disimpan di gudang atau area penyimpanan khusus dan setiap jenis bahan diberi label yang jelas, terbaca, dan tidak tertukar sehingga barang-barang tersebut dapat dibedakan.\n(Dasar: Permenaker 5/2018 Pasal 44 ayat (2))\nLihat rincian butir pada sheet Rincian Kriteria (2).",
+     "housekeeping", "Tata Laksana Kerumahtanggaan"),
+]
+
+
+MASTER_PERTANYAAN = {}
+INFOGRAFIS_DATA = {}
+
+for kode_kat, kat, kode_dim, teks_q, panduan_raw, kelompok_id, topik_nama in _RAW_MATRIKS_2:
+    panduan_bersih, regulasi_str = _clean_panduan(panduan_raw)
+    is_disabilitas = kode_dim in PERTANYAAN_DISABILITAS
+    is_terbalik = kode_dim in PERTANYAAN_TERBALIK
+    depends_on = "HL1.7" if kode_dim in {"HL1.8", "HL1.9"} else None
+
+    MASTER_PERTANYAAN[kode_dim] = {
+        "id": kode_dim,
+        "kode": kode_dim,
+        "kode_kategori": kode_kat,
+        "kategori": kat,
+        "aspek": kat,
+        "sub_bidang": kat,
+        "topik": topik_nama,
+        "kelompok": kelompok_id,
+        "teks": teks_q,
+        "panduan": panduan_bersih,
+        "definisi": panduan_bersih,
+        "regulasi": regulasi_str,
         "tipe": "ya_tidak",
-        "opsi": OPT_YA_TIDAK,
-        "bobot_max": 2
-    },
-    "A11": {
-        "id": "A11",
-        "kode": "A11",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah dinding dan langit - langit dalam kondisi kering atau tidak lembab?",
-        "definisi": "Dinding dan langit-langit merupakan permukaan pembatas vertikal dan bagian atas ruang gedung. Kondisi kering atau tidak lembap berarti permukaan tidak menunjukkan kebasahan, rembesan, atau tanda kelembapan yang masih berlangsung.",
-        "bukti": "Kondisi permukaan dinding dan langit-langit, keberadaan bercak air, rembesan, kebocoran, pengembunan, cat mengelupas, serta pertumbuhan jamur.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A12": {
-        "id": "A12",
-        "kode": "A12",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah dinding dan langit-langit dicat dan/atau memiliki permukaan yang mudah dibersihkan?",
-        "definisi": "Dinding merupakan permukaan pembatas ruang gedung, sedangkan langit-langit merupakan permukaan bagian atas ruang. Permukaan memenuhi kriteria apabila dicat dan/atau memiliki lapisan yang mudah dibersihkan dengan cara perawatan normal. Jenis cat tertentu tidak ditetapkan dalam ketentuan ini.",
-        "bukti": "Kondisi cat atau pelapis, tingkat kehalusan permukaan, keberadaan debu dan kotoran.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A13": {
-        "id": "A13",
-        "kode": "A13",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah pengecatan ulang dinding dan langit-langit dilakukan paling sedikit 1 (satu) kali dalam setiap 5 (lima) tahun?",
-        "definisi": "Pengecatan ulang merupakan kegiatan memperbarui lapisan cat pada dinding dan langit-langit agar permukaannya tetap terpelihara. Pengecatan ulang dilakukan paling sedikit satu kali dalam setiap periode lima tahun.",
-        "bukti": "Dokumen riwayat pemeliharaan gedung, tanggal pengecatan terakhir, bukti pembelian cat atau jasa pengecatan, serta dokumentasi pelaksanaan.",
-        "tipe": "ya_tidak",
-        "opsi": OPT_YA_TIDAK,
-        "bobot_max": 2
-    },
-    "A14": {
-        "id": "A14",
-        "kode": "A14",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah dinding dan langit-langit dibersihkan paling sedikit 1 (satu) kali dalam setahun?",
-        "definisi": "Pembersihan dinding dan langit-langit merupakan kegiatan menghilangkan debu, kotoran, atau noda dari permukaan tersebut. Pembersihan dilakukan paling sedikit satu kali dalam setahun.",
-        "bukti": "Jadwal pembersihan, checklist atau logbook pelaksanaan, dokumentasi kegiatan.",
-        "tipe": "ya_tidak",
-        "opsi": OPT_YA_TIDAK,
-        "bobot_max": 2
-    },
-    "A15": {
-        "id": "A15",
-        "kode": "A15",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah lantai terbuat dari bahan yang keras, tahan air, dan tahan terhadap bahan kimia yang dapat merusaknya?",
-        "definisi": "Lantai merupakan permukaan dasar ruang yang digunakan untuk aktivitas pekerja. Bahan lantai yang memenuhi persyaratan memiliki karakteristik keras, tahan air, dan tahan terhadap bahan kimia yang dapat merusaknya sesuai kondisi penggunaan.",
-        "bukti": "Jenis material lantai, kondisi permukaan, keberadaan retakan atau celah, daya serap air.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A16": {
-        "id": "A16",
-        "kode": "A16",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah lantai memiliki permukaan yang datar, tidak licin, dan mudah dibersihkan?",
-        "definisi": "Permukaan lantai yang memenuhi persyaratan merupakan permukaan yang datar, tidak licin pada penggunaan normal, dan mudah dibersihkan sehingga tidak menyulitkan aktivitas maupun pemeliharaan kebersihan.",
-        "bukti": "Kondisi kerataan lantai, keberadaan lubang atau tonjolan, karakteristik antiselip, kondisi sambungan lantai, serta kemudahan membersihkan debu, kotoran, dan cairan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A17": {
-        "id": "A17",
-        "kode": "A17",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah lantai dibersihkan secara teratur?",
-        "definisi": "Pembersihan lantai secara teratur merupakan kegiatan membersihkan lantai secara berulang sesuai jadwal dan kebutuhan area, sehingga kotoran tidak dibiarkan menumpuk. Ketentuan ini tidak menetapkan frekuensi harian atau mingguan tertentu.",
-        "bukti": "Jadwal pembersihan, checklist atau logbook, frekuensi pembersihan, ketersediaan petugas dan peralatan kebersihan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A18": {
-        "id": "A18",
-        "kode": "A18",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah atap mampu melindungi bagian dalam gedung dari panas matahari dan air hujan?",
-        "definisi": "Atap merupakan bagian teratas gedung yang berfungsi melindungi bagian dalam bangunan dari paparan langsung panas matahari dan air hujan.",
-        "bukti": "Kondisi fisik atap, kondisi sambungan atap, tidak ada rembesan atau celah terbuka.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A19": {
-        "id": "A19",
-        "kode": "A19",
-        "aspek": "Gedung",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Gedung",
-        "kelompok": "gedung",
-        "teks": "Apakah atap tidak bocor, tidak berlubang, dan bebas dari jamur?",
-        "definisi": "Atap yang memenuhi persyaratan merupakan atap yang tidak mengalami kebocoran, tidak memiliki lubang, dan tidak ditumbuhi jamur pada bagian yang dapat diperiksa.",
-        "bukti": "Keberadaan lubang atau retakan, tanda kebocoran dan rembesan, pertumbuhan jamur atau lumut.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
+        "opsi": OPT_IYA_TIDAK,
+        "bobot_max": 1,
+        "khusus_disabilitas": is_disabilitas,
+        "reverse_score": is_terbalik,
+        "depends_on": depends_on,
+        "has_infografis": True
+    }
 
-    # Aspek: Ruang Bawah Tanah (Bobot: 5%, Skor Maks: 5)
-    "A21": {
-        "id": "A21",
-        "kode": "A21",
-        "aspek": "Ruang Bawah Tanah",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Ruang Bawah Tanah",
-        "kelompok": "bawah_tanah",
-        "teks": "Apakah bangunan bawah tanah memiliki struktur yang kuat?",
-        "definisi": "Bangunan bawah tanah merupakan ruang atau struktur yang berada di bawah permukaan tanah dan menjadi bagian dari Tempat Kerja. Struktur yang kuat tidak menunjukkan kerusakan yang mengindikasikan berkurangnya kekuatan, seperti retak signifikan, deformasi, atau elemen struktur yang rusak.",
-        "bukti": "Kondisi dinding penahan tanah, kolom, balok, lantai, fondasi yang dapat diperiksa, plafon, serta indikasi retakan, deformasi, pergeseran, dan kerusakan struktur.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A22": {
-        "id": "A22",
-        "kode": "A22",
-        "aspek": "Ruang Bawah Tanah",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Ruang Bawah Tanah",
-        "kelompok": "bawah_tanah",
-        "teks": "Apakah bangunan bawah tanah dilengkapi dengan sistem ventilasi udara yang memadai?",
-        "definisi": "Sistem ventilasi udara pada bangunan bawah tanah merupakan sarana ventilasi alami atau mekanis yang memungkinkan pertukaran udara. Sistem dinilai memadai apabila tersedia, dapat berfungsi, dan jalur atau perangkatnya tidak terhalang.",
-        "bukti": "Ketersediaan ventilasi alami atau mekanis, kondisi dan fungsi exhaust fan/blower, saluran udara, filter, sirkulasi udara.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A23": {
-        "id": "A23",
-        "kode": "A23",
-        "aspek": "Ruang Bawah Tanah",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Ruang Bawah Tanah",
-        "kelompok": "bawah_tanah",
-        "teks": "Apakah bangunan bawah tanah memiliki sumber pencahayaan yang memadai?",
-        "definisi": "Sumber pencahayaan pada bangunan bawah tanah merupakan sumber cahaya alami dan/atau buatan yang memungkinkan pekerja melihat jalur, area kerja, serta potensi bahaya saat melakukan aktivitas normal.",
-        "bukti": "Ketersediaan sumber pencahayaan alami dan buatan, jumlah serta kondisi lampu, pemerataan cahaya, keberadaan area gelap, dan hasil pengukuran intensitas pencahayaan menggunakan lux meter.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A24": {
-        "id": "A24",
-        "kode": "A24",
-        "aspek": "Ruang Bawah Tanah",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Ruang Bawah Tanah",
-        "kelompok": "bawah_tanah",
-        "teks": "Apakah bangunan bawah tanah memiliki saluran pembuangan air yang mengalir dengan baik?",
-        "definisi": "Saluran pembuangan air pada bangunan bawah tanah merupakan saluran yang mengalirkan air menuju tempat pembuangan. Saluran berfungsi dengan baik apabila tidak tampak tersumbat dan tidak menimbulkan genangan akibat aliran yang terhambat.",
-        "bukti": "Ketersediaan saluran pembuangan, kelancaran aliran air, kondisi fisik saluran, keberadaan genangan, serta fungsi pompa pembuangan apabila digunakan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "A25": {
-        "id": "A25",
-        "kode": "A25",
-        "aspek": "Ruang Bawah Tanah",
-        "kategori": "A. Bangunan Tempat Kerja",
-        "topik": "Bangunan Tempat Kerja",
-        "sub_bidang": "Ruang Bawah Tanah",
-        "kelompok": "bawah_tanah",
-        "teks": "Apakah bangunan bawah tanah dalam kondisi bersih dan terawat dengan baik?",
-        "definisi": "Bangunan bawah tanah yang bersih dan terawat merupakan ruang dan fasilitas bawah tanah yang bebas dari kotoran atau sampah yang nyata serta dipelihara agar komponen dan fasilitasnya tidak dibiarkan rusak atau tidak berfungsi.",
-        "bukti": "Kondisi kebersihan lantai, dinding, dan langit-langit; keberadaan sampah, debu, jamur, rembesan air, dan hama; kondisi fisik bangunan; serta penataan barang dan peralatan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
+    badge_label = f"♿ Disabilitas • {kode_kat}" if is_disabilitas else f"📋 {kode_kat} • {kode_dim}"
+    INFOGRAFIS_DATA[kode_dim] = {
+        "istilah": f"[{kode_dim}] {kat}",
+        "regulasi": regulasi_str,
+        "ringkasan": panduan_bersih,
+        "poin_kunci": [],
+        "visual_badge": badge_label
+    }
 
-    # --------------------------------------------------------------------------
-    # KATEGORI B: FASILITAS KEBERSIHAN (Total Bobot 25%)
-    # --------------------------------------------------------------------------
-    # Aspek: Toilet (Bobot: 10%, Skor Maks: 10)
-    "B1": {
-        "id": "B1",
-        "kode": "B1",
-        "aspek": "Toilet",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Toilet",
-        "kelompok": "toilet",
-        "teks": "Apakah tersedia fasilitas toilet di gedung tempat kerja? (Jika tidak, apakah fasilitas toilet bergabung dengan gedung lain?)",
-        "definisi": "Fasilitas toilet yang disediakan untuk pekerja pada gedung tempat kerja, baik berada mandiri di dalam gedung atau bergabung dengan fasilitas terdekat.",
-        "bukti": "Keberadaan fisik toilet di gedung atau akses fasilitas toilet bersama.",
-        "tipe": "info_toilet",
-        "opsi": ["Tersedia mandiri di gedung ini", "Bergabung dengan fasilitas gedung lain"],
-        "bobot_max": 0
-    },
-    "B2": {
-        "id": "B2",
-        "kode": "B2",
-        "aspek": "Toilet",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Toilet",
-        "kelompok": "toilet",
-        "teks": "Apakah jumlah toilet mencukupi kebutuhan pekerja?",
-        "definisi": "Jumlah toilet yang mencukupi merupakan ketersediaan fasilitas toilet yang sebanding dengan jumlah pekerja yang menggunakan tempat kerja.",
-        "bukti": "Jumlah unit toilet yang tersedia dan berfungsi dibandingkan rasio baku Permenaker No. 5/2018.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "B3": {
-        "id": "B3",
-        "kode": "B3",
-        "aspek": "Toilet",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Toilet",
-        "kelompok": "toilet",
-        "teks": "Apakah toilet bersih dan tidak menimbulkan bau?",
-        "definisi": "Toilet yang bersih dan tidak menimbulkan bau merupakan fasilitas sanitasi yang tidak memiliki kotoran, noda, sampah, atau sisa penggunaan yang terlihat serta tidak mengeluarkan bau tidak sedap yang mengganggu. Penilaian dilakukan melalui observasi pada lantai, jamban, dinding, tempat cuci tangan, dan bagian toilet lainnya.",
-        "bukti": "Kebersihan lantai, kloset, dinding, dan fasilitas toilet; kondisi saluran pembuangan; ketersediaan air bersih; ventilasi; serta keberadaan bau tidak sedap.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "B4": {
-        "id": "B4",
-        "kode": "B4",
-        "aspek": "Toilet",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Toilet",
-        "kelompok": "toilet",
-        "teks": "Apakah area kerja memiliki toilet khusus penyandang disabilitas?",
-        "definisi": "Toilet khusus penyandang disabilitas merupakan fasilitas toilet yang disediakan untuk mendukung akses dan penggunaan oleh penyandang disabilitas. Penilaian awal dilakukan dengan memastikan keberadaan fasilitas; apabila tersedia, kesesuaian ukuran, akses masuk, pintu, ruang manuver, kemiringan lantai, dan pegangan diperiksa pada butir khusus berikutnya.",
-        "bukti": "Ketersediaan toilet aksesibel, jalur menuju toilet, lebar pintu, ruang gerak kursi roda, pegangan rambat, kondisi kloset, wastafel, dan fasilitas pendukung lainnya.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
 
-    # Aspek: Loker (Bobot: 5%, Skor Maks: 5)
-    "B5": {
-        "id": "B5",
-        "kode": "B5",
-        "aspek": "Loker",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Loker",
-        "kelompok": "loker",
-        "teks": "Apakah loker tersedia sesuai kebutuhan pekerja?",
-        "definisi": "Loker yang tersedia sesuai kebutuhan merupakan tempat penyimpanan barang atau pakaian pekerja dengan jumlah yang memadai bagi pekerja yang membutuhkannya.",
-        "bukti": "Jumlah loker yang layak digunakan dengan jumlah pekerja yang memerlukan fasilitas penyimpanan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
+PANDUAN_PENGISIAN = {
+    "Iya": {
+        "skor": 1,
+        "makna": "Memenuhi / Iya",
+        "kriteria": "Kondisi aktual sesuai dengan panduan penilaian dan persyaratan K3."
     },
-    "B6": {
-        "id": "B6",
-        "kode": "B6",
-        "aspek": "Loker",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Loker",
-        "kelompok": "loker",
-        "teks": "Apakah area kerja memiliki ruang ganti pakaian?",
-        "definisi": "Ruang ganti pakaian merupakan ruang khusus yang disediakan untuk pekerja mengganti pakaian sebelum atau sesudah bekerja. Keberadaannya dinilai berdasarkan tersedianya ruang yang dapat digunakan untuk berganti pakaian secara aman, tertib, dan menjaga privasi pekerja.",
-        "bukti": "Ketersediaan ruang ganti pakaian khusus yang aman, tertib, dan menjaga privasi.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-
-    # Aspek: Tempat Sampah (Bobot: 5%, Skor Maks: 5)
-    "B7": {
-        "id": "B7",
-        "kode": "B7",
-        "aspek": "Tempat Sampah",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Tempat Sampah",
-        "kelompok": "tempat_sampah",
-        "teks": "Apakah area kerja memiliki tempat sampah?",
-        "definisi": "Tempat sampah merupakan wadah untuk menampung sampah sementara sebelum dikumpulkan dan dibuang atau diangkut ke tempat pengelolaan sampah.",
-        "bukti": "Ketersediaan, jumlah, lokasi penempatan, kondisi fisik, kapasitas, kebersihan tempat sampah.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "B8": {
-        "id": "B8",
-        "kode": "B8",
-        "aspek": "Tempat Sampah",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Tempat Sampah",
-        "kelompok": "tempat_sampah",
-        "teks": "Apakah area kerja menyediakan tempat sampah terpilah untuk sampah organik, nonorganik dan bahan berbahaya?",
-        "definisi": "Tempat sampah khusus bahan berbahaya merupakan wadah yang ditetapkan untuk menampung limbah atau sampah yang memiliki sifat berbahaya sesuai jenis kegiatan di tempat kerja. Wadah harus sesuai dengan karakteristik bahan, dalam kondisi baik, tertutup atau diberi penandaan bila diperlukan, dan terpisah dari sampah umum untuk mencegah pencampuran.",
-        "bukti": "Ketersediaan wadah sampah organik, nonorganik, dan limbah B3; label atau simbol pada wadah.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-
-    # Aspek: Peralatan Kebersihan (Bobot: 5%, Skor Maks: 5)
-    "B9": {
-        "id": "B9",
-        "kode": "B9",
-        "aspek": "Peralatan Kebersihan",
-        "kategori": "B. Fasilitas Kebersihan",
-        "topik": "Fasilitas Kebersihan",
-        "sub_bidang": "Peralatan Kebersihan",
-        "kelompok": "peralatan_kebersihan",
-        "teks": "Apakah peralatan kebersihan dalam kondisi layak dan dapat digunakan?",
-        "definisi": "Peralatan kebersihan yang layak merupakan alat yang berada dalam kondisi fisik baik dan dapat menjalankan fungsi normalnya, tidak rusak sehingga menghambat atau membuat kegiatan pembersihan tidak dapat dilakukan.",
-        "bukti": "Ketersediaan, kondisi fisik, fungsi, kebersihan, kesesuaian penggunaan, dan tempat penyimpanan peralatan kebersihan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-
-    # --------------------------------------------------------------------------
-    # KATEGORI C: KEBUTUHAN UDARA (Total Bobot 25%)
-    # --------------------------------------------------------------------------
-    # Aspek: KUDR (Bobot: 10%, Skor Maks: 10)
-    "C1": {
-        "id": "C1",
-        "kode": "C1",
-        "aspek": "KUDR",
-        "kategori": "C. Kebutuhan Udara",
-        "topik": "Kebutuhan Udara",
-        "sub_bidang": "KUDR",
-        "kelompok": "kudr",
-        "teks": "Apakah suhu udara di ruang kerja berada dalam rentang 23–26°C?",
-        "definisi": "Penilaian terhadap kondisi temperatur udara di dalam ruang kerja untuk mengetahui kesesuaian suhu dengan ketentuan KUDR. Pengukuran dilakukan menggunakan termometer pada area aktivitas pekerja.",
-        "bukti": "Hasil pengukuran suhu menggunakan termometer.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "C2": {
-        "id": "C2",
-        "kode": "C2",
-        "aspek": "KUDR",
-        "kategori": "C. Kebutuhan Udara",
-        "topik": "Kebutuhan Udara",
-        "sub_bidang": "KUDR",
-        "kelompok": "kudr",
-        "teks": "Apakah kelembapan udara di ruang kerja berada dalam rentang 40–60%?",
-        "definisi": "Penilaian terhadap tingkat kelembapan relatif udara (Relative Humidity/RH) di dalam ruang kerja untuk mengetahui apakah kondisi kelembapan berada dalam rentang yang dipersyaratkan.",
-        "bukti": "Hasil pengukuran menggunakan hygrometer.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-
-    # Aspek: Ventilasi (Bobot: 10%, Skor Maks: 10)
-    "C3": {
-        "id": "C3",
-        "kode": "C3",
-        "aspek": "Ventilasi",
-        "kategori": "C. Kebutuhan Udara",
-        "topik": "Kebutuhan Udara",
-        "sub_bidang": "Ventilasi",
-        "kelompok": "ventilasi",
-        "teks": "Apakah ventilasi berfungsi dengan baik?",
-        "definisi": "Fungsi ventilasi adalah kondisi ventilasi, baik alami maupun buatan, yang bekerja dengan baik dalam menukar udara ruangan, yang ditandai dengan adanya aliran udara dan peralatan yang beroperasi normal.",
-        "bukti": "Ketersediaan ventilasi alami atau mekanis, kondisi dan fungsi kipas atau exhaust fan, kelancaran aliran udara, distribusi udara, kondisi filter dan saluran udara, serta catatan pemeliharaan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-
-    # Aspek: Ruang Udara (Bobot: 5%, Skor Maks: 5)
-    "C4": {
-        "id": "C4",
-        "kode": "C4",
-        "aspek": "Ruang Udara",
-        "kategori": "C. Kebutuhan Udara",
-        "topik": "Kebutuhan Udara",
-        "sub_bidang": "Ruang Udara",
-        "kelompok": "ruang_udara",
-        "teks": "Apakah setiap orang bekerja dalam ruangan mendapat ruang udara (cubic space) paling sedikit 10 m³?",
-        "definisi": "Setiap pekerja memperoleh ruang udara paling sedikit 10 m³, dengan memperhitungkan tinggi ruangan sesuai ketentuan Pasal 42 Permenaker No. 5 Tahun 2018.",
-        "bukti": "Luas lantai ruangan, tinggi ruangan, volume ruang udara, dan jumlah pekerja yang bekerja secara bersamaan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-
-    # --------------------------------------------------------------------------
-    # KATEGORI D: TATA LAKSANA KERUMAHTANGGAAN (HOUSEKEEPING) (Total Bobot 25%)
-    # --------------------------------------------------------------------------
-    # Aspek: Housekeeping (Bobot: 25%, Skor Maks: 25)
-    "D1": {
-        "id": "D1",
-        "kode": "D1",
-        "aspek": "Housekeeping",
-        "kategori": "D. Tata Laksana Kerumahtanggaan (Housekeeping)",
-        "topik": "Tata Laksana Kerumahtanggaan",
-        "sub_bidang": "Tata Laksana Kerumahtanggaan",
-        "kelompok": "housekeeping",
-        "teks": "Apakah terdapat pemisahan antara alat, perkakas, dan bahan yang diperlukan atau digunakan?",
-        "definisi": "Penilaian terhadap kondisi penataan dan pemisahan alat, perkakas, serta bahan yang digunakan dalam kegiatan kerja berdasarkan jenis, fungsi, karakteristik, dan potensi bahayanya. Pemisahan dilakukan untuk mencegah tercampurnya bahan yang tidak kompatibel, menghindari kontaminasi, mengurangi risiko kecelakaan kerja, serta memudahkan penyimpanan, pengambilan, dan penggunaan peralatan maupun bahan.",
-        "bukti": "Pengelompokan alat, perkakas, dan bahan; ketersediaan tempat penyimpanan khusus.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "D2": {
-        "id": "D2",
-        "kode": "D2",
-        "aspek": "Housekeeping",
-        "kategori": "D. Tata Laksana Kerumahtanggaan (Housekeeping)",
-        "topik": "Tata Laksana Kerumahtanggaan",
-        "sub_bidang": "Tata Laksana Kerumahtanggaan",
-        "kelompok": "housekeeping",
-        "teks": "Apakah terdapat penataan antara alat, perkakas, dan bahan yang diperlukan atau digunakan?",
-        "definisi": "Penilaian terhadap kondisi penempatan dan pengorganisasian alat, perkakas, serta bahan yang diperlukan atau digunakan dalam kegiatan kerja agar tersusun secara rapi, teratur, mudah dijangkau, dan sesuai dengan fungsi serta kebutuhan pekerjaan.",
-        "bukti": "Keteraturan penempatan alat, perkakas, dan bahan.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "D3": {
-        "id": "D3",
-        "kode": "D3",
-        "aspek": "Housekeeping",
-        "kategori": "D. Tata Laksana Kerumahtanggaan (Housekeeping)",
-        "topik": "Tata Laksana Kerumahtanggaan",
-        "sub_bidang": "Tata Laksana Kerumahtanggaan",
-        "kelompok": "housekeeping",
-        "teks": "Apakah terdapat aktivitas pembersihan antara alat, perkakas, dan bahan yang diperlukan atau digunakan?",
-        "definisi": "Penilaian terhadap pelaksanaan kegiatan pembersihan alat, perkakas, dan bahan yang digunakan dalam kegiatan kerja untuk menghilangkan debu, kotoran, sisa bahan, minyak, tumpahan, atau kontaminan lainnya yang dapat memengaruhi kebersihan, fungsi peralatan, kualitas pekerjaan, serta kesehatan dan keselamatan pekerja.",
-        "bukti": "Catatan kegiatan pembersihan, checklist rutin, dan keteraturan pembersihan fisik alat.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
-    },
-    "D4": {
-        "id": "D4",
-        "kode": "D4",
-        "aspek": "Housekeeping",
-        "kategori": "D. Tata Laksana Kerumahtanggaan (Housekeeping)",
-        "topik": "Tata Laksana Kerumahtanggaan",
-        "sub_bidang": "Tata Laksana Kerumahtanggaan",
-        "kelompok": "housekeeping",
-        "teks": "Apakah terdapat prosedur kebersihan, penempatan dan penataan untuk alat, perkakas dan bahan dan secara berkala prosedur dikembangkan?",
-        "definisi": "Prosedur mencakup tata cara pembersihan, lokasi penyimpanan, pengelompokan, penempatan berdasarkan jenis dan karakteristik, serta frekuensi pelaksanaan. Pengembangan prosedur dilakukan secara berkala berdasarkan hasil evaluasi, perubahan proses kerja, kondisi lingkungan kerja, dan potensi bahaya yang ditemukan.",
-        "bukti": "Dokumen SOP atau instruksi kerja, pengaturan frekuensi dan penanggung jawab pembersihan, ketentuan penempatan dan penataan, bukti sosialisasi, checklist inspeksi, laporan evaluasi, serta riwayat revisi prosedur.",
-        "tipe": "radio_3",
-        "opsi": OPT_3_TINGKAT,
-        "bobot_max": 2
+    "Tidak": {
+        "skor": 0,
+        "makna": "Tidak Memenuhi / Tidak",
+        "kriteria": "Kondisi aktual belum memenuhi panduan penilaian yang diharapkan."
     }
 }
 
 
-# ==============================================================================
-# KONFIGURASI BOBOT & SKOR MAKSIMUM PER ASPEK & KATEGORI
-# (Sesuai Sheet 'Ringkasan Skor')
-# ==============================================================================
-BOBOT_RINGKASAN_SKOR = {
-    "A. Bangunan Tempat Kerja": {
-        "kategori_label": "Kondisi Fisik Bangunan",
-        "bobot_kategori_pct": 25,
-        "aspek": {
-            "halaman": {
-                "nama": "Halaman",
-                "soal_ids": ["A2", "A3", "A4", "A6", "A7"],
-                "screening_id": "A5",
-                "bobot_pct": 10,
-                "skor_maks": 10,
-                "target_indikator": 4
-            },
-            "gedung": {
-                "nama": "Gedung",
-                "soal_ids": ["A8", "A9", "A10", "A11", "A12", "A13", "A14", "A15", "A16", "A17", "A18", "A19"],
-                "bobot_pct": 10,
-                "skor_maks": 10,
-                "target_indikator": 12
-            },
-            "bawah_tanah": {
-                "nama": "Ruang Bawah Tanah",
-                "soal_ids": ["A21", "A22", "A23", "A24", "A25"],
-                "bobot_pct": 5,
-                "skor_maks": 5,
-                "target_indikator": 5
-            }
-        }
-    },
-    "B. Fasilitas Kebersihan": {
-        "kategori_label": "Fasilitas Kebersihan & Sanitasi",
-        "bobot_kategori_pct": 25,
-        "aspek": {
-            "toilet": {
-                "nama": "Toilet",
-                "soal_ids": ["B2", "B3", "B4"],
-                "info_id": "B1",
-                "bobot_pct": 10,
-                "skor_maks": 10,
-                "target_indikator": 3
-            },
-            "loker": {
-                "nama": "Loker",
-                "soal_ids": ["B5", "B6"],
-                "bobot_pct": 5,
-                "skor_maks": 5,
-                "target_indikator": 2
-            },
-            "tempat_sampah": {
-                "nama": "Tempat Sampah",
-                "soal_ids": ["B7", "B8"],
-                "bobot_pct": 5,
-                "skor_maks": 5,
-                "target_indikator": 2
-            },
-            "peralatan_kebersihan": {
-                "nama": "Peralatan Kebersihan",
-                "soal_ids": ["B9"],
-                "bobot_pct": 5,
-                "skor_maks": 5,
-                "target_indikator": 1
-            }
-        }
-    },
-    "C. Kebutuhan Udara": {
-        "kategori_label": "Kebutuhan Kualitas & Ruang Udara",
-        "bobot_kategori_pct": 25,
-        "aspek": {
-            "kudr": {
-                "nama": "KUDR",
-                "soal_ids": ["C1", "C2"],
-                "bobot_pct": 10,
-                "skor_maks": 10,
-                "target_indikator": 2
-            },
-            "ventilasi": {
-                "nama": "Ventilasi",
-                "soal_ids": ["C3"],
-                "bobot_pct": 10,
-                "skor_maks": 10,
-                "target_indikator": 1
-            },
-            "ruang_udara": {
-                "nama": "Ruang Udara",
-                "soal_ids": ["C4"],
-                "bobot_pct": 5,
-                "skor_maks": 5,
-                "target_indikator": 1
-            }
-        }
-    },
-    "D. Tata Laksana Kerumahtanggaan (Housekeeping)": {
-        "kategori_label": "Tata Laksana Kerumahtanggaan (Housekeeping)",
-        "bobot_kategori_pct": 25,
-        "aspek": {
-            "housekeeping": {
-                "nama": "Tata Laksana Kerumahtanggaan",
-                "soal_ids": ["D1", "D2", "D3", "D4"],
-                "bobot_pct": 25,
-                "skor_maks": 25,
-                "target_indikator": 4
-            }
-        }
-    }
-}
-
-
-# Metadata Istilah / Infografis Regulasi
-INFOGRAFIS_DATA = {
-    "A10": {
-        "istilah": "Kecukupan Ruang Gerak (Minimal 2 m² per orang)",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Pasal 9 Ayat (2)",
-        "ringkasan": "Setiap pekerja wajib memiliki ruang gerak bebas (free floor space) minimal 2 meter persegi, tidak terhalang mesin, barang, atau perabotan.",
-        "poin_kunci": [
-            "Mencegah resiko terjepit dan cedera ergonomi",
-            "Memastikan kelancaran jalur evakuasi darurat",
-            "Dihitung di luar area meja kerja utama dan mesin produksi"
-        ],
-        "visual_badge": "📐 Min. 2 m² / Orang"
-    },
-    "B2": {
-        "istilah": "Standar Rasio Kebutuhan Toilet K3",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Lampiran IV Bidang Kebersihan",
-        "ringkasan": "Rasio jumlah jamban/toilet wajib sebanding dengan total jumlah tenaga kerja pada bangunan tempat kerja.",
-        "poin_kunci": [
-            "1 - 15 pekerja: minimal 1 toilet",
-            "16 - 30 pekerja: minimal 2 toilet",
-            "31 - 45 pekerja: minimal 3 toilet",
-            "46 - 60 pekerja: minimal 4 toilet",
-            "61 - 80 pekerja: minimal 5 toilet",
-            "81 - 100 pekerja: minimal 6 toilet",
-            "> 100 pekerja: +1 toilet setiap kelipatan 40 pekerja tambahan"
-        ],
-        "visual_badge": "🚻 Rasio Pekerja : Jamban"
-    },
-    "B4": {
-        "istilah": "Akses Toilet Khusus Penyandang Disabilitas",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Pasal 33",
-        "ringkasan": "Fasilitas toilet aksesibel yang menyediakan kemudahan ruang gerak, pintu lebar, dan pegangan rambat bagi penyandang disabilitas.",
-        "poin_kunci": [
-            "Lebar pintu masuk memadai untuk kursi roda (min. 85 cm)",
-            "Tersedia pegangan rambat (handrail) di dekat kloset dan wastafel",
-            "Permukaan lantai tidak licin dan tanpa undakan berbahaya"
-        ],
-        "visual_badge": "♿ Akses Inklusif"
-    },
-    "C1": {
-        "istilah": "Kenyamanan Suhu Udara Kerja (23°C – 26°C)",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Bagian Kedua (Faktor Fisika)",
-        "ringkasan": "Suhu ruangan perkantoran dan ruang kerja tertutup disyaratkan berkisar 23°C – 26°C.",
-        "poin_kunci": [
-            "Mencegah resiko heat stress (kelelahan akibat panas) atau hipotermia",
-            "Menjaga konsentrasi kerja dan metabolisme tubuh optimal",
-            "Pengukuran dilakukan menggunakan termometer bola basah atau termohigrometer"
-        ],
-        "visual_badge": "🌡️ 23°C - 26°C Suhu Ideal"
-    },
-    "C2": {
-        "istilah": "Kelembapan Relatif Udara (40% – 60%)",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Standar Kualitas Udara Dalam Ruang",
-        "ringkasan": "Batas kelembaban udara ideal tempat kerja tertutup guna mencegah gangguan respirasi dan pertumbuhan jamur/patogen.",
-        "poin_kunci": [
-            "< 40%: Udara terlalu kering, memicu iritasi saluran pernapasan",
-            "40% - 60%: Rentang kenyamanan fisiologis manusia optimal",
-            "> 60%: Udara terlalu lembap, memicu pertumbuhan spora jamur dan bakteri"
-        ],
-        "visual_badge": "💧 40% - 60% Kelembapan"
-    },
-    "C4": {
-        "istilah": "Cubic Space (Volume Udara ≥ 10 m³ per Pekerja)",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Pasal 10 Ayat (1)",
-        "ringkasan": "Setiap ruang kerja harus menyediakan volume udara (ruang kubik) paling sedikit 10 meter kubik per orang yang bekerja di dalamnya.",
-        "poin_kunci": [
-            "Rumus: (Panjang x Lebar x Tinggi) / Jumlah Pekerja >= 10 m³",
-            "Tinggi ruangan yang diperhitungkan maksimal 4 meter",
-            "Menjamin sirkulasi udara dan kecukupan pertukaran udara segar"
-        ],
-        "visual_badge": "📦 Min. 10 m³ / Pekerja"
-    },
-    "D1": {
-        "istilah": "Prinsip 5R / 5S: Pemisahan (Seiri / Ringkas)",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Tata Laksana Kerumahtanggaan",
-        "ringkasan": "Pemisahan tegas antara barang, alat, dan bahan yang diperlukan dengan yang tidak diperlukan lagi.",
-        "poin_kunci": [
-            "Membuang atau memindahkan barang yang tidak relevan",
-            "Mengurangi tumpukan sampah dan bahaya tersandung/kebakaran",
-            "Memaksimalkan efisiensi dan keamanan ruang kerja"
-        ],
-        "visual_badge": "🧹 5R: Ringkas (Seiri)"
-    },
-    "D4": {
-        "istilah": "SOP & Prosedur Kerumahtanggaan Berkelanjutan",
-        "regulasi": "Permenaker No. 5 Tahun 2018 Pasal 45",
-        "ringkasan": "Tersedianya Standar Operasional Prosedur tertulis mengenai pembersihan, tata letak bahan, serta peninjauan berkala.",
-        "poin_kunci": [
-            "Pekerja memiliki panduan baku kebersihan dan penyimpanan alat",
-            "Dilakukan evaluasi dan inspeksi kebersihan berkala",
-            "Membangun budaya kerja K3 yang tertib dan higienis"
-        ],
-        "visual_badge": "📋 SOP & Review Rutin"
-    }
-}
+def hitung_skor_opsi(q_id: str, jawaban: str) -> int:
+    """Menghitung skor (1 atau 0) berdasarkan pilihan Iya/Tidak (memperhitungkan butir terbalik)."""
+    ans_norm = str(jawaban).strip().lower()
+    is_yes = ans_norm in {"iya", "ya"}
+    is_no = ans_norm == "tidak"
+    if q_id in PERTANYAAN_TERBALIK:
+        return 1 if is_no else 0
+    return 1 if is_yes else 0
 
 
 # ==============================================================================
@@ -1121,12 +566,9 @@ def hitung_evaluasi_toilet_lengkap(daftar_gedung: list) -> dict:
 
 
 def evaluasi_toilet_daftar_gedung(daftar_gedung: list) -> list:
-    """Memperbarui status Q/B2 evaluasi toilet pada tiap gedung."""
+    """Memperbarui status TL7.12 evaluasi rasio toilet pada tiap gedung."""
     if not daftar_gedung:
         return daftar_gedung
-
-    eval_info = hitung_evaluasi_toilet_lengkap(daftar_gedung)
-    kumulatif_memenuhi = eval_info["kumulatif_memenuhi"]
 
     for g in daftar_gedung:
         toilet_gedung = to_int(g.get("Jumlah Toilet", 0))
@@ -1134,179 +576,179 @@ def evaluasi_toilet_daftar_gedung(daftar_gedung: list) -> list:
         syarat_mandiri = hitung_kebutuhan_toilet(pekerja_gedung)
         mandiri_memenuhi = toilet_gedung >= syarat_mandiri
 
-        if "B2_Jawaban" not in g or not g.get("B2_Jawaban"):
-            if mandiri_memenuhi:
-                g["B2_Jawaban"] = "Memenuhi"
-                g["B2_Poin"] = 2
-            elif toilet_gedung > 0:
-                g["B2_Jawaban"] = "Memenuhi Sebagian"
-                g["B2_Poin"] = 1
-            else:
-                g["B2_Jawaban"] = "Tidak Memenuhi"
-                g["B2_Poin"] = 0
+        if "TL7.12_Jawaban" not in g or not g.get("TL7.12_Jawaban"):
+            g["TL7.12_Jawaban"] = "Iya" if mandiri_memenuhi else "Tidak"
+            g["TL7.12_Poin"] = 1 if mandiri_memenuhi else 0
 
     return daftar_gedung
 
 
 # ==============================================================================
-# PERHITUNGAN SKOR RINCI PER ASPEK & KATEGORI
-# (Mengikuti Struktur Tabel Sheet 'Ringkasan Skor')
+# PERHITUNGAN SKOR RINCI PER KATEGORI & TOPIK ('MATRIKS PENILAIAN (2)')
 # ==============================================================================
+def is_soal_applicable(q_id: str, data_gedung: dict, fasilitas_terpilih: list) -> bool:
+    """Menentukan apakah butir pertanyaan berlaku untuk gedung ini."""
+    q_info = MASTER_PERTANYAAN.get(q_id)
+    if not q_info:
+        return False
+    if q_info["kelompok"] not in fasilitas_terpilih:
+        return False
+
+    # Cek apakah pertanyaan khusus disabilitas
+    jml_disabilitas = to_int(data_gedung.get("Pekerja Disabilitas", 0))
+    if q_info.get("khusus_disabilitas") and jml_disabilitas <= 0:
+        return False
+
+    # Cek jika HL1.1 dijawab Tidak, maka HL1.2 - HL1.9 tidak berlaku
+    if q_id != "HL1.1" and q_info["kelompok"] == "halaman":
+        ans_hl1_1 = str(data_gedung.get("HL1.1_Jawaban", "Iya")).strip().lower()
+        if ans_hl1_1 == "tidak":
+            return False
+
+    # Cek dependensi saluran pembuangan air halaman (HL1.8 & HL1.9 bergantung pada HL1.7)
+    dep = q_info.get("depends_on")
+    if dep:
+        ans_dep = str(data_gedung.get(f"{dep}_Jawaban", "Iya")).strip().lower()
+        if ans_dep == "tidak":
+            return False
+
+    return True
+
+
 def hitung_skor_lengkap_gedung(data_gedung: dict, fasilitas_terpilih: list = None) -> dict:
     """
-    Menghitung skor evaluasi K3 gedung secara terstruktur persis sesuai sheet 'Ringkasan Skor':
-    - Skor per Aspek (Halaman, Gedung, Ruang Bawah Tanah, Toilet, Loker, dll.)
-    - Capaian (%) per Aspek
-    - Subtotal Skor per Kategori (A, B, C, D) masing-masing bobot 25%
-    - Total Nilai Akhir Tempat Kerja (Maks 100)
+    Menghitung skor evaluasi K3 gedung berdasarkan sheet 'Matriks Penilaian (2)':
+    - Setiap butir bernilai 1 (Memenuhi) atau 0 (Tidak Memenuhi)
+    - Pertanyaan disabilitas (GD2.4, TL7.14, TL7.15, TL7.16) hanya dihitung jika Pekerja Disabilitas > 0
     """
-    if fasilitas_terpilih is None:
-        fasilitas_terpilih = data_gedung.get("Fasilitas Terpilih", [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]])
+    fasilitas_norm = normalize_fasilitas_ids(fasilitas_terpilih or data_gedung.get("Fasilitas Terpilih", []))
+
+    skor_topik = {
+        "Kondisi Fisik": 0,
+        "Fasilitas Kebersihan": 0,
+        "Kebutuhan Udara": 0,
+        "Tata Laksana Kerumahtanggaan": 0
+    }
+    maks_topik = {
+        "Kondisi Fisik": 0,
+        "Fasilitas Kebersihan": 0,
+        "Kebutuhan Udara": 0,
+        "Tata Laksana Kerumahtanggaan": 0
+    }
+
+    # Kelompokkan per kode_kategori (HL1 .. KR11)
+    urutan_kat = ["HL1", "GD2", "DL3", "LT4", "AT5", "BT6", "TL7", "FK8", "SP9", "KU10", "KR11"]
+    kat_stats = {}
+
+    for q_id, q_info in MASTER_PERTANYAAN.items():
+        if not is_soal_applicable(q_id, data_gedung, fasilitas_norm):
+            continue
+
+        k_kat = q_info["kode_kategori"]
+        if k_kat not in kat_stats:
+            kat_stats[k_kat] = {
+                "Kode Kategori": k_kat,
+                "Kategori": q_info["kategori"],
+                "Topik": q_info["topik"],
+                "Jumlah Indikator": 0,
+                "Skor Tercapai": 0,
+                "Skor Maksimum": 0
+            }
+
+        poin = to_int(data_gedung.get(f"{q_id}_Poin", 0))
+        kat_stats[k_kat]["Jumlah Indikator"] += 1
+        kat_stats[k_kat]["Skor Maksimum"] += 1
+        kat_stats[k_kat]["Skor Tercapai"] += poin
+
+        topik = q_info["topik"]
+        skor_topik[topik] = skor_topik.get(topik, 0) + poin
+        maks_topik[topik] = maks_topik.get(topik, 0) + 1
 
     rincian_tabel = []
-    skor_kategori = {
-        "A. Bangunan Tempat Kerja": 0.0,
-        "B. Fasilitas Kebersihan": 0.0,
-        "C. Kebutuhan Udara": 0.0,
-        "D. Tata Laksana Kerumahtanggaan (Housekeeping)": 0.0
-    }
-    skor_maks_tersedia = 0.0
+    for k_kat in urutan_kat:
+        if k_kat not in kat_stats:
+            continue
+        st_item = kat_stats[k_kat]
+        jml = st_item["Jumlah Indikator"]
+        tercapai = st_item["Skor Tercapai"]
+        capaian_pct = round((tercapai / jml * 100.0), 1) if jml > 0 else 100.0
 
-    for kat_nama, kat_info in BOBOT_RINGKASAN_SKOR.items():
-        subtotal_kat = 0.0
+        if capaian_pct >= 85:
+            interp = "Memenuhi Standar"
+        elif capaian_pct >= 65:
+            interp = "Cukup / Perlu Perbaikan Minor"
+        else:
+            interp = "Kurang / Prioritas Tindakan Korektif"
 
-        for aspek_id, aspek_info in kat_info["aspek"].items():
-            aspek_aktif = aspek_id in fasilitas_terpilih
-            if not aspek_aktif:
-                continue
+        rincian_tabel.append({
+            "Kode Kategori": k_kat,
+            "Kategori": st_item["Kategori"],
+            "Aspek": f"[{k_kat}] {st_item['Kategori']}",
+            "Jumlah Indikator": jml,
+            "Bobot Nilai Max": jml,
+            "Bobot Persentase": f"{jml} Butir",
+            "Capaian (%)": capaian_pct,
+            "Skor Maksimum": jml,
+            "Skor Tercapai": tercapai,
+            "Interpretasi Internal": interp
+        })
 
-            soal_ids = aspek_info["soal_ids"]
-            screening_id = aspek_info.get("screening_id")
-
-            # Filter soal yang berlaku (contoh jika A5 = Tidak ada saluran air, A6 dan A7 N/A)
-            soal_berlaku = []
-            ada_saluran = True
-            if screening_id and screening_id in data_gedung:
-                ans_screening = str(data_gedung.get(f"{screening_id}_Jawaban", "")).lower()
-                if "tidak" in ans_screening:
-                    ada_saluran = False
-
-            for q_id in soal_ids:
-                q_meta = MASTER_PERTANYAAN.get(q_id, {})
-                if q_meta.get("depends_on") == screening_id and not ada_saluran:
-                    continue
-                soal_berlaku.append(q_id)
-
-            jml_indikator = len(soal_berlaku)
-            bobot_nilai_max = jml_indikator * 2
-            skor_maks_aspek = float(aspek_info["skor_maks"])
-            bobot_pct = float(aspek_info["bobot_pct"])
-
-            # Hitung raw score yang diperoleh
-            raw_skor = 0
-            for q_id in soal_berlaku:
-                raw_skor += to_int(data_gedung.get(f"{q_id}_Poin", 0))
-
-            if bobot_nilai_max > 0:
-                capaian_pct = (raw_skor / bobot_nilai_max) * 100.0
-                skor_didapat = (raw_skor / bobot_nilai_max) * skor_maks_aspek
-            else:
-                capaian_pct = 100.0
-                skor_didapat = skor_maks_aspek
-
-            subtotal_kat += skor_didapat
-            skor_maks_tersedia += skor_maks_aspek
-
-            # Interpretasi internal
-            if capaian_pct >= 85:
-                interpretasi = "Sangat Baik / Terpenuhi"
-            elif capaian_pct >= 60:
-                interpretasi = "Cukup / Perlu Perbaikan Minor"
-            else:
-                interpretasi = "Kurang / Prioritas Tindakan Korektif"
-
-            rincian_tabel.append({
-                "Kategori": kat_nama,
-                "Aspek": aspek_info["nama"],
-                "aspek_id": aspek_id,
-                "Jumlah Indikator": jml_indikator,
-                "Bobot Nilai Max": bobot_nilai_max,
-                "Skor Mentah": raw_skor,
-                "Bobot Persentase": f"{int(bobot_pct)}%",
-                "Capaian (%)": round(capaian_pct, 1),
-                "Skor Maksimum": skor_maks_aspek,
-                "Skor Tercapai": round(skor_didapat, 2),
-                "Interpretasi Internal": interpretasi
-            })
-
-        skor_kategori[kat_nama] = round(subtotal_kat, 2)
-
-    total_skor_gedung = round(sum(skor_kategori.values()), 2)
-    indeks_pemenuhan = round((total_skor_gedung / skor_maks_tersedia * 100), 1) if skor_maks_tersedia > 0 else 0.0
+    total_skor = sum(skor_topik.values())
+    skor_maks_tersedia = sum(maks_topik.values())
+    indeks_pemenuhan = round((total_skor / skor_maks_tersedia * 100.0), 1) if skor_maks_tersedia > 0 else 0.0
 
     return {
-        "skor_kategori": skor_kategori,
-        "total_skor": total_skor_gedung,
-        "skor_maks_tersedia": round(skor_maks_tersedia, 2),
+        "skor_kategori": skor_topik,
+        "maks_kategori": maks_topik,
+        "total_skor": total_skor,
+        "skor_maks_tersedia": skor_maks_tersedia,
         "indeks_pemenuhan": indeks_pemenuhan,
         "rincian_tabel": rincian_tabel,
-        "Skor_Topik_1": skor_kategori["A. Bangunan Tempat Kerja"],
-        "Skor_Topik_2": skor_kategori["B. Fasilitas Kebersihan"],
-        "Skor_Topik_3": skor_kategori["C. Kebutuhan Udara"],
-        "Skor_Topik_4": skor_kategori["D. Tata Laksana Kerumahtanggaan (Housekeeping)"]
+        "Skor_Topik_1": skor_topik["Kondisi Fisik"],
+        "Skor_Topik_2": skor_topik["Fasilitas Kebersihan"],
+        "Skor_Topik_3": skor_topik["Kebutuhan Udara"],
+        "Skor_Topik_4": skor_topik["Tata Laksana Kerumahtanggaan"]
     }
 
 
-# ==============================================================================
-# ANALISIS EVALUASI & IDENTIFIKASI BUTIR DEFISIT / KURANG
-# ==============================================================================
 def analisis_evaluasi_gedung(data_gedung: dict, fasilitas_ids: list = None) -> dict:
-    """Menganalisis hasil survei gedung, mencatat poin kurang (< 2) beserta rekomendasinya."""
-    if not fasilitas_ids:
-        fasilitas_ids = data_gedung.get("Fasilitas Terpilih", [f["id"] for f in KELOMPOK_FASILITAS if f["default_checked"]])
-
-    skor_info = hitung_skor_lengkap_gedung(data_gedung, fasilitas_ids)
+    """Menganalisis hasil survei gedung, mencatat butir yang bernilai 0 beserta rekomendasinya."""
+    fasilitas_norm = normalize_fasilitas_ids(fasilitas_ids or data_gedung.get("Fasilitas Terpilih", []))
+    skor_info = hitung_skor_lengkap_gedung(data_gedung, fasilitas_norm)
     pertanyaan_kurang = []
 
     for q_id, q_info in MASTER_PERTANYAAN.items():
-        if q_info["kelompok"] not in fasilitas_ids:
-            continue
-        if q_info.get("bobot_max", 2) == 0:
+        if not is_soal_applicable(q_id, data_gedung, fasilitas_norm):
             continue
 
         poin_raw = data_gedung.get(f"{q_id}_Poin")
         jawaban = str(data_gedung.get(f"{q_id}_Jawaban", ""))
 
+        if "N/A" in jawaban:
+            continue
+
         if poin_raw is not None and str(poin_raw).strip() != "":
             skor_angka = to_int(poin_raw, 0)
-            # Kriteria kurang: skor di bawah nilai maksimal 2
-            if skor_angka < 2:
-                info_reg = INFOGRAFIS_DATA.get(q_id, {})
-                regulasi_ref = info_reg.get("regulasi", "Permenaker No. 5 Tahun 2018 tentang K3 Lingkungan Kerja")
-
-                if skor_angka == 1:
-                    rekom = f"Tingkatkan pemenuhan aspek '{q_info['aspek']}' agar konsisten di seluruh area/shift dan dilengkapi bukti objektif yang memadai."
-                else:
-                    rekom = f"Segera sediakan, fungsikan, dan lakukan perbaikan pada aspek '{q_info['aspek']}' sesuai ketentuan baku K3."
-
+            if skor_angka < 1:
                 pertanyaan_kurang.append({
                     "id": q_id,
+                    "kode_kategori": q_info["kode_kategori"],
                     "topik": q_info["topik"],
-                    "aspek": q_info["aspek"],
-                    "sub_bidang": q_info["sub_bidang"],
+                    "aspek": q_info["kategori"],
+                    "sub_bidang": q_info["kategori"],
                     "teks": q_info["teks"],
-                    "definisi": q_info["definisi"],
-                    "bukti": q_info["bukti"],
+                    "definisi": q_info["panduan"],
+                    "bukti": q_info["panduan"],
                     "jawaban": jawaban,
                     "skor": skor_angka,
-                    "regulasi": regulasi_ref,
-                    "rekomendasi": rekom
+                    "regulasi": q_info["regulasi"],
+                    "rekomendasi": f"Tindak lanjuti pemenuhan [{q_id}]: {q_info['panduan']}"
                 })
 
     bidang_perlu_perbaikan = []
     for r in skor_info["rincian_tabel"]:
-        if r["Capaian (%)"] < 70:
-            bidang_perlu_perbaikan.append(f"{r['Aspek']} ({r['Capaian (%)']}%)")
+        if r["Capaian (%)"] < 75:
+            bidang_perlu_perbaikan.append(f"{r['Kode Kategori']} - {r['Kategori']} ({r['Skor Tercapai']}/{r['Skor Maksimum']})")
 
     status_pemenuhan = "Memenuhi Standar" if skor_info["indeks_pemenuhan"] >= 75 and len(bidang_perlu_perbaikan) == 0 else "Perlu Tindakan Perbaikan"
 
